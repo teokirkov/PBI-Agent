@@ -13,9 +13,11 @@ jobs:
     steps:
       - name: Test HTTPS reachability (no credentials needed)
         run: |
-          echo "Resolving and connecting to https://$DBX_HOST ..."
+          # Strip any leading http(s):// and trailing slash, in case a full URL was pasted
+          CLEAN_HOST=$(echo "$DBX_HOST" | sed -E 's#^https?://##; s#/+$##')
+          echo "Resolving and connecting to https://$CLEAN_HOST ..."
           set +e
-          curl -sS -o /dev/null -w "HTTP status: %{http_code}\n" --max-time 10 "https://$DBX_HOST/api/2.0/clusters/list"
+          curl -sS -o /dev/null -w "HTTP status: %{http_code}\n" --max-time 10 "https://$CLEAN_HOST/api/2.0/clusters/list"
           STATUS=$?
           set -e
           echo ""
