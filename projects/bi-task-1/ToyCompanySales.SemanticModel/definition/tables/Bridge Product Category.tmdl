@@ -1,6 +1,6 @@
 /// Bridge table: one row per product-to-category membership (441 rows across
 /// 227 products, 1 to 3 tags each). Recovers the many-to-many that
-/// Warehouse Stock Item.xlsx flattened into CategoryName1/2/3.
+/// dss_demos.bi_tasks.warehouse_stock_item flattened into CategoryName1/2/3.
 ///
 /// The whole table is hidden - report authors should use Category[Category]
 /// and Product's attributes, never the bridge directly. Its relationship to

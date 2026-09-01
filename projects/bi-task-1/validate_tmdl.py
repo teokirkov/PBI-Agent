@@ -114,9 +114,20 @@ expr_text = (MODEL / "expressions.tmdl").read_text(encoding="utf-8")
 expressions = re.findall(r"^expression\s+(\w+)", expr_text, re.M)
 qo = re.search(r"PBI_QueryOrder = (\[.*\])", model_text)
 if qo:
-    for q in json.loads(qo.group(1)):
+    ordered = json.loads(qo.group(1))
+    for q in ordered:
         if q not in tables and q not in expressions:
             fail(f"model.tmdl PBI_QueryOrder names '{q}', which is neither a table nor an expression")
+    # ...and the reverse: every Power Query query must be listed. Checked both
+    # ways because adding a query and forgetting the annotation is the silent
+    # half of this mistake. Calculated tables (Date, _Measures) are DAX, not
+    # Power Query, so they are correctly absent.
+    for e in expressions:
+        if e not in ordered:
+            fail(f"model.tmdl PBI_QueryOrder omits the expression '{e}'")
+    for tname, t in tables.items():
+        if "m" in {k for _, k in t["partitions"]} and tname not in ordered:
+            fail(f"model.tmdl PBI_QueryOrder omits the M-backed table '{tname}'")
 
 # Date table must be marked as a date table
 date_tbl = tables.get("Date")
@@ -233,17 +244,76 @@ for tname, t in tables.items():
         check_dax(f"{tname} (calculated table)", dax, local_cols=local)
 
 # 6. M expression references
+# Any identifier shaped like one of this project's own query names. Kept as a
+# name-shape pattern rather than a hardcoded list so that renaming a query
+# cannot quietly switch this check off - a reference to a query that no longer
+# exists still has to fail. SourceFolderPath is retired (decision 0009) but
+# stays in the pattern deliberately: if an Excel-era source step is ever pasted
+# back in, the reference must fail loudly rather than pass unnoticed.
+EXPR_REF = r"\b(stg\w+|fn[A-Z]\w+|Databricks[A-Z]\w*|SourceFolderPath)\b"
+
+# The project sources from Unity Catalog, not local workbooks (decision 0009).
+# These constructs cannot appear in a correct model any more, and a half-applied
+# source migration is exactly the shape of mistake that leaves one behind.
+RETIRED_M = ("Excel.Workbook", "File.Contents", "Table.PromoteHeaders")
+for _label, _text in [(p.name, strip_comments(p.read_text(encoding="utf-8")))
+                      for p in sorted((MODEL / "tables").glob("*.tmdl"))] + \
+                     [("expressions.tmdl", strip_comments(expr_text))]:
+    for _construct in RETIRED_M:
+        if _construct in _text:
+            fail(f"{_label}: uses '{_construct}', a file-source construct retired "
+                 f"by decision 0009 - this model reads from Databricks")
 for tname, t in tables.items():
     for pname, kind in t["partitions"]:
         if kind != "m":
             continue
-        for name in re.findall(r"\b(stg\w+|SourceFolderPath)\b", t["body"]):
+        for name in re.findall(EXPR_REF, t["body"]):
             if name not in expressions:
                 fail(f"{tname}: M source references '{name}', which is not an expression")
 
-for name in re.findall(r"\b(stg\w+|SourceFolderPath)\b", strip_comments(expr_text)):
+for name in re.findall(EXPR_REF, strip_comments(expr_text)):
     if name not in expressions:
         fail(f"expressions.tmdl: references '{name}', which is not defined")
+
+# 6b. Every column an M query *produces* must be accounted for
+# Checked in this direction on purpose. Check 7 below confirms each model column
+# has a sourceColumn, but that cannot catch a rename whose target no longer
+# matches the model - the stale name still sits in TransformColumnTypes and
+# looks fine. Going the other way, from what the M emits to what the model
+# consumes, does catch it. A produced name is legitimate if the model loads it,
+# a later step renames it away, or a later step drops it.
+for tname, t in tables.items():
+    if "m" not in {k for _, k in t["partitions"]}:
+        continue
+    m_text = t["body"]
+    produced: set[str] = set()
+    # rename targets: {"old", "new"}
+    for pair_block in re.findall(r"Table\.RenameColumns\(.*?\{(.*?)\}\s*\)", m_text, re.S):
+        produced |= {b for _a, b in re.findall(r'\{"([^"]+)",\s*"([^"]+)"\}', pair_block)}
+    # added columns: Table.AddColumn(prev, "Name", ...)
+    produced |= set(re.findall(r'Table\.AddColumn\([^,]+,\s*"([^"]+)"', m_text))
+    # expand targets: Table.ExpandTableColumn(prev, "Col", {from}, {to})
+    for exp in re.findall(r"Table\.ExpandTableColumn\((.*?)\)", m_text, re.S):
+        lists = re.findall(r"\{(.*?)\}", exp, re.S)
+        if len(lists) >= 2:
+            produced |= set(re.findall(r'"([^"]+)"', lists[1]))
+    # unpivot: Table.UnpivotOtherColumns(prev, {keys}, "Attr", "Value")
+    for unp in re.findall(r'Table\.UnpivotOtherColumns\(.*?\}\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"', m_text, re.S):
+        produced |= set(unp)
+
+    rename_sources = set()
+    for pair_block in re.findall(r"Table\.RenameColumns\(.*?\{(.*?)\}\s*\)", m_text, re.S):
+        rename_sources |= {a for a, _b in re.findall(r'\{"([^"]+)",\s*"([^"]+)"\}', pair_block)}
+    removed = set()
+    for rem in re.findall(r"Table\.RemoveColumns\([^,]+,\s*\{(.*?)\}", m_text, re.S):
+        removed |= set(re.findall(r'"([^"]+)"', rem))
+
+    loaded = {c["sourceColumn"] for c in t["columns"].values() if c["sourceColumn"]}
+    for name in sorted(produced):
+        if name in loaded or name in rename_sources or name in removed:
+            continue
+        fail(f"{tname}: M produces column '{name}', but the model neither loads it "
+             f"(no matching sourceColumn) nor renames or removes it later")
 
 # 7. sourceColumn present on every non-calculated column
 for tname, t in tables.items():

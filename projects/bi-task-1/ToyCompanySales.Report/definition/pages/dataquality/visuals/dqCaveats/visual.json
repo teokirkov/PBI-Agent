@@ -41,7 +41,7 @@
                     }
                   },
                   {
-                    "value": "Sales.xlsx also carries AmountExcludingTax / TaxAmount / TransactionAmount, which are at invoice grain repeated on every line — summing those would return £583.9m against a true £158.1m, 3.69× too high. They are not loaded into this model at all, so the mistake is unavailable.",
+                    "value": "The sales table also carries AmountExcludingTax / TaxAmount / TransactionAmount, which are at invoice grain repeated on every line — summing those would return £583.9m against a true £158.1m, 3.69× too high. They are not loaded into this model at all, so the mistake is unavailable.",
                     "textStyle": {
                       "fontSize": "11pt",
                       "color": "#605E5C"

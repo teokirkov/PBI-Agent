@@ -1,6 +1,7 @@
 # BI Task 1 — Analysis
 
-Written findings from the seven source files and the model built on them. All
+Written findings from the seven source tables (`dss_demos.bi_tasks.*` in the
+org's Databricks warehouse) and the model built on them. All
 figures are ex-tax, at order-line grain, and include the never-invoiced orders
 (`docs/decisions/0002`, `0003`). Data covers **1 January 2013 → 29 February
 2016**.
@@ -248,7 +249,7 @@ included, `[Total Sales]` counts £4.87m of goods that were, as far as the data
 shows, never shipped. That is the user's decision and it is the right one for an
 *order*-based report, but it should not be read as revenue.
 
-### 3.4 The invoice-grain trap in `Sales.xlsx`
+### 3.4 The invoice-grain trap in `sales`
 
 Covered in full in `docs/decisions/0002` and `GRAIN.md`; repeated here because
 it is the single easiest way to get this dataset badly wrong.
@@ -268,10 +269,31 @@ mistake is now unavailable.
   arithmetically derivable from it and from each other
   (`InvoiceDate == TransactionDate` on 100% of rows,
   `FinalizationDate == InvoiceDate + 1 day` on 100% of rows).
-- **Money columns arrive as text** (`"£2,300.00"`). Sidestepped: `Sales.xlsx`
-  has three columns all headed `UnitPrice` — currency text, always empty, and
-  numeric — and the numeric one is identical to the text one on every row, so
-  the model reads that and never parses currency strings.
+- **Money columns arrive as text, and the currency symbol is corrupted.**
+  Every money column in `dss_demos.bi_tasks` is typed `STRING` and carries its
+  formatting — and the pound sign itself is gone: `£13.00` is stored literally
+  as `?13.00`. That is not a display artifact of the tool reading it. `HEX()`
+  computed inside Databricks returns `3F` for the leading byte on all 212,774
+  rows — a real ASCII question mark, so the `£` was lost to a non-UTF8 encoding
+  somewhere in the load into the warehouse.
+
+  The earlier `.xlsx` extract let the model sidestep this: it carried three
+  columns all headed `UnitPrice` (currency text, always empty, and numeric) and
+  the model simply read the numeric one. The warehouse table keeps only the
+  **text** copy, so parsing is now unavoidable. It is done in one place,
+  `fnParseMoney`, which keeps only digits, `.` and `-` rather than stripping a
+  specific symbol — so whether a value arrives as `?13.00`, `£13.00` or
+  `13.00`, the number is the same, and fixing the encoding upstream cannot
+  silently move any figure in the report. Totals reconcile to the penny against
+  the pre-Databricks figures (§1), so nothing was lost — but see §5.6: the
+  symbol should be fixed at source, because a *report* that ever displays the
+  raw string will show a question mark.
+
+- **`TaxRate` arrives as percent-formatted text** (`"15.00%"`) where the
+  `.xlsx` extract had the number `0.15`, and **`AccountOpenedDate` as
+  `"1-Jan-13"`** where the extract had a real date. Both are parsed explicitly
+  with a stated culture. Only two tax rates exist (10.00%, 15.00%) and all 663
+  account-opened dates parse.
 - **`SupplierReference`'s underscore is not always leading.** The earlier
   profile said it was; it is not. 8 of the 13 values carry it in front
   (`_AA20384`) and 5 carry it trailing (`082420938_`). A `Text.TrimStart` would
@@ -282,7 +304,7 @@ mistake is now unavailable.
   stay unique. Note `"      Steel Gray"` has a legitimate internal space, which
   `Text.Trim` correctly leaves alone.
 - **Constant and empty columns dropped**: `IsUndersupplyBackordered` (always
-  `"Yes"`), `UnitPrice.1` (100% blank), and seven on `Customer.xlsx`
+  `"Yes"`) and seven on `customer`
   (`DeliveryMethodID`, `StandardDiscountPercentage`, `IsStatementSent`,
   `IsOnCreditHold`, `PaymentDays`, `DeliveryRun`, `RunPosition`).
 - **Five person-ID columns have no lookup table** (`SalespersonPersonID`,
@@ -295,7 +317,7 @@ mistake is now unavailable.
   at all. `DeliveryLocation` is WKT text (`POINT (-102.62 41.50)`) which Power
   BI map visuals cannot consume without parsing. Also worth requesting.
 - **Special-deal columns are dated outside the data window** — every
-  `StartDate`/`EndDate` on `Customer.xlsx` falls in 2016 Q2, after the last
+  `StartDate`/`EndDate` on `customer` falls in 2016 Q2, after the last
   order date. No discount in this file was ever applicable to any order in it,
   so discount analysis is not possible and the columns are not loaded.
 - **Referential integrity is clean.** All ten candidate joins were checked and
@@ -362,3 +384,11 @@ Four captions worth putting on the canvas rather than leaving in this file.
 5. **Clarify whether an order-level online/offline flag exists upstream**
    (§3.2). If it does, the online sales KPI becomes what the brief actually asks
    for.
+6. **Fix the currency-symbol encoding in the warehouse load** (§3.5). Every
+   money column in `dss_demos.bi_tasks` stores `?` where `£` belongs, on every
+   row of every table. The model is immune — it parses the digits and its
+   totals reconcile exactly — but anything that reads those columns as text
+   inherits the corruption, and the underlying load is presumably not
+   UTF8-clean for other characters either. A one-line encoding fix at the
+   ingest, and worth checking whether any other column in the schema carries
+   non-ASCII text that has been silently mangled the same way.

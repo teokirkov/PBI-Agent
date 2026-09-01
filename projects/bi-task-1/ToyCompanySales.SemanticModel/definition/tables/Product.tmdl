@@ -1,5 +1,6 @@
-/// One row per stock item (227 rows). Source: Warehouse Stock Item.xlsx with
-/// Warehouse Color.xlsx merged in rather than snowflaked. All 227 items sell.
+/// One row per stock item (227 rows). Source: `warehouse_stock_item` with
+/// `warehouse_color` merged in rather than snowflaked, both in
+/// dss_demos.bi_tasks. All 227 items sell.
 /// Category membership is NOT on this table - it is genuinely many-to-many and
 /// lives in Category via Bridge Product Category (docs/decisions/0004).
 table 'Product'

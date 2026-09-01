@@ -6,10 +6,15 @@ starts here.
 - **Project:** `projects/bi-task-1/`
 - **Deliverable:** `ToyCompanySales.pbip` (+ `.SemanticModel/`, `.Report/`)
 - **Brief:** `docs/assignment/bi-task-1.pdf`
-- **Source data:** `docs/sample-data/bi-task-1/` (7 `.xlsx` files)
-- **Status:** **Semantic model complete; report visuals are a first-pass
-  draft.** Power Query, star schema, relationships and all 22 measures are
-  written and cross-reference-clean. 61 visuals across the 6 pages are
+- **Source data:** `dss_demos.bi_tasks.*` in the org's Databricks
+  warehouse — 7 tables (decision 0009). The original `.xlsx` file drop is
+  retired; `validate_tmdl.py` now fails if an `Excel.Workbook` /
+  `File.Contents` / `SourceFolderPath` construct reappears.
+- **Status:** **Semantic model complete and now sourced from Databricks;
+  report visuals are a first-pass draft.** Power Query, star schema,
+  relationships and all 22 measures are written and cross-reference-clean.
+  The source swap is verified against the live warehouse (schema and totals);
+  the *M syntax* that reaches it is not yet Desktop-verified — §6.1. 61 visuals across the 6 pages are
   hand-authored PBIR JSON that has **never been opened in Power BI Desktop** —
   treat the report layer as a starting point for a Desktop pass, not as
   finished work (§6.1). Nothing is blocked; see §7 for what is open.
@@ -56,7 +61,7 @@ tell you whether Desktop accepts a given keyword — see §6.1.
 
 | # | Task | Status |
 |---|------|--------|
-| 1 | Load the data sources | **Done** — 7 files → 4 model queries + 3 staging expressions |
+| 1 | Load the data sources | **Done** — 7 Databricks tables → 4 model queries + 3 staging expressions, via 4 connection parameters and 1 shared navigation expression |
 | 2 | Power Query: remove `_` from `SupplierReference`; trim `ColorName` | **Done** — both, see §3 |
 | 3 | Star schema; Date dimension as a **calculated table** | **Done** — `Date` is a DAX `CALENDAR()` calculated table, as mandated |
 | 4 | Document granularity of every table in a separate file | **Done** — `GRAIN.md` |
@@ -112,8 +117,22 @@ tell you whether Desktop accepts a given keyword — see §6.1.
 | `Bridge Product Category` | 441 | one product-category membership | M (hidden) |
 | `_Measures` | 1 | none — holds the 22 measures | DAX calculated table |
 
-Staging queries (M expressions, **not loaded as tables**): `SourceFolderPath`
-(parameter), `stgColor`, `stgSupplierCategory`, `stgStockItem`.
+Staging queries (M expressions, **not loaded as tables**):
+
+| Query | Kind | Purpose |
+|---|---|---|
+| `DatabricksHost` | parameter | workspace hostname, no `https://`, no trailing slash |
+| `DatabricksHttpPath` | parameter | SQL warehouse HTTP path |
+| `DatabricksCatalog` | parameter | `dss_demos` |
+| `DatabricksSchema` | parameter | `bi_tasks` |
+| `DatabricksBiTasks` | expression | the single `Databricks.Catalogs` → catalog → schema navigation, shared by all 7 table queries |
+| `fnParseMoney` | function | currency-text → number; see §3.2 |
+| `stgColor` | expression | colour lookup, trimmed, merged into `Product` |
+| `stgSupplierCategory` | expression | supplier category, merged into `Supplier` |
+| `stgStockItem` | expression | stock item rows, consumed by `Product`, `Category` and the bridge |
+
+The navigation lives in **one** expression rather than being repeated in seven
+queries, deliberately — see §6.1 for why that matters here.
 
 Seven source files collapse to six loaded dimensions plus one bridge, because
 Colour and Supplier Catalogue are flattened into their parents rather than
@@ -143,7 +162,9 @@ Per-year: 2013 £46,928,592.80 / 19,450 orders · 2014 £51,492,003.40 / 21,199 
 
 ---
 
-## 3. The two mandated Power Query fixes
+## 3. Power Query cleanups
+
+### 3.1 The two the brief mandates
 
 Both confirmed necessary against the actual data.
 
@@ -156,6 +177,52 @@ Both confirmed necessary against the actual data.
    whitespace. `Text.Trim` fixes it and does not create duplicates — all 36
    names stay unique. `"      Steel Gray"` has a legitimate internal space,
    which `Text.Trim` correctly leaves alone.
+
+Both were **re-verified against Databricks** after the source change, not
+assumed to have carried over: all 13 `SupplierReference` values still carry an
+underscore in the same 8-leading / 5-trailing split, and `ColorName` is still
+padded on 21 of 36 with 36 distinct values after trimming.
+
+### 3.2 A third the warehouse forced, which the files did not
+
+Not in the brief — required by the source change, and it is the one thing about
+this migration that is **not** a like-for-like swap.
+
+Every money column in `dss_demos.bi_tasks` is typed `STRING` and carries its
+formatting, **and the currency symbol is corrupted**: `£13.00` is stored
+literally as `?13.00`. That is not a rendering artifact of the client reading
+it — `HEX()` computed inside Databricks returns `3F` for the leading byte, a
+real ASCII question mark, so the `£` was lost to a non-UTF8 encoding in the
+load into the warehouse.
+
+The `.xlsx` extract let the model dodge this entirely: it carried three columns
+all headed `UnitPrice` (currency text, always empty, and numeric) and the model
+read the numeric one. The warehouse keeps only the **text** copy, so parsing is
+now unavoidable. It is done once, in `fnParseMoney`, which keeps only digits,
+`.` and `-` rather than stripping a named symbol — so `?13.00`, `£13.00` and
+`13.00` all yield the same number and a fix upstream cannot silently move a
+figure in the report.
+
+Two more of the same kind:
+
+- **`TaxRate`** arrives as `"15.00%"` where the extract had `0.15`. Parsed back
+  to a fraction; only two values exist (10.00%, 15.00%).
+- **`AccountOpenedDate`** arrives as `"1-Jan-13"` where the extract had a real
+  date — a *different* format from `OrderDate`'s US long-date, so it needs its
+  own format string. All 663 parse.
+
+`ANALYSIS.md` §5.6 asks for the encoding to be fixed at source. The model is
+immune, but anything displaying those columns as text is not.
+
+### 3.3 What did *not* change
+
+Every transformation downstream of the source step is untouched: the column
+selections, the renames to business names, the explicit typing, the
+`Line Amount` calculation, `Is Invoiced`, the colour and supplier-category
+merges, the category unpivot and dedupe, and the blank labelling
+(`(No colour)`, `(Not specified)`, `(No buying group)`). The star schema, all 7
+relationships, `Date`, and all 22 measures are byte-for-byte unchanged — the
+diff touches no `.tmdl` measure or relationship at all.
 
 ---
 
@@ -187,20 +254,20 @@ only (the Desktop/Service/Release items are in §6).
 
 | Item | Status |
 |---|---|
-| Power Query step names describe what they do | Yes — `Source`, `PromotedHeaders`, `SelectedColumns`, `CleanedSupplierReference`, …, ending in `Result` |
+| Power Query step names describe what they do | Yes — `Source`, `SelectedColumns`, `RenamedColumns`, `ParsedAmounts`, `CleanedSupplierReference`, …, ending in `Result` |
 | Combine similar actions into one step | Yes — one `Table.RenameColumns` and one `Table.TransformColumnTypes` per query |
-| Queries organised into folders | Yes — `Staging`, `Model\Facts`, `Model\Dimensions`. **See the caveat in §6.1** |
-| Correct data type on every column | Yes — sources load with `delayTypes = true`, so nothing is auto-typed and every surviving column is typed explicitly |
-| Use parameters | Yes — `SourceFolderPath`; no absolute path is hardcoded anywhere |
+| Queries organised into folders | **No, deliberately.** Hand-authored `queryGroup` / `PBI_QueryGroups` is confirmed to break deserialization (run log, sixth attempt) and `power-query-conventions/SKILL.md` now forbids it. Organise the folders by hand in Desktop |
+| Correct data type on every column | Yes — every surviving column is typed explicitly in a `Table.TransformColumnTypes` step. Nothing relies on connector type inference, which matters more now: the warehouse hands back `STRING` for every money, rate and date column |
+| Use parameters | Yes — `DatabricksHost`, `DatabricksHttpPath`, `DatabricksCatalog`, `DatabricksSchema`. No hostname, warehouse path, catalog or schema is hardcoded in any query, and no credential is stored at all — Desktop prompts for the sign-in |
 | Filter early | N/A — no rows are filtered out (decision 0003 keeps all of them). Column selection is done as early as possible |
-| Query folding | N/A — `.xlsx` sources do not fold |
+| Query folding | **Now applicable** — the Databricks connector folds, where `.xlsx` could not. Column selection is the first step in every query, so the projection should fold to the warehouse. Not yet *verified* to fold (needs Desktop's View Native Query) — see §6.1 |
 | Disable load for tables not needed | Yes — the 3 staging queries are M expressions with no table, so they cannot load |
 | One-to-many Dim→Fact, star schema | Yes — all 7 relationships are many-to-one |
 | Avoid bi-directional filters | **One deliberate exception** — the bridge. Documented in decision 0004; **needs a correctness test in Desktop**, see §6.2 |
 | Avoid many-to-many | **One, inherent to the source data.** Same exception, same test |
 | Be aware of report locale | Yes — model culture `en-GB`; dates parsed with an explicit `en-US` culture (the source format is US long-date); `FORMAT` calls in `Date` pass `"en-GB"` explicitly so month and day names do not shift with the machine |
 | Custom Date table | Yes — `Date`, a DAX calculated table per the brief, marked as a date table (`dataCategory: Time` + `isKey` on `Date`) |
-| Load only required columns | Yes — 35 source columns on `Sales.xlsx` reduce to 12; 36 on `Customer.xlsx` to 7; 24 on `Warehouse Stock Item.xlsx` to 9; 26 on `Purchasing Supplier.xlsx` to 5 |
+| Load only required columns | Yes — 33 source columns on `sales` reduce to 12; 36 on `customer` to 7; 24 on `warehouse_stock_item` to 9; 26 on `purchasing_supplier` to 5 |
 | Hide fields not used in the report | Yes — every FK, `Line Amount`, `Quantity`, `Picked Quantity`, `Tax Rate`, `Order Date`, and the whole bridge table |
 | Calculated column in Power Query, not DAX | Yes — `Line Amount` and `Category Group` are both M. The only DAX-computed table is `Date`, which the brief mandates |
 | Auto-summarisation off for non-additive fields | Yes — `summarizeBy: none` on every ID, price and rate |
@@ -230,17 +297,34 @@ toward 1 GB. No optimisation warranted.
 
 ### 6.1 Before the project will open — required
 
-**Set the `SourceFolderPath` parameter.** It defaults to
-`C:\repos\PBI-Agent\docs\sample-data\bi-task-1\`, which is almost certainly not
-where your checkout is. In Desktop: *Transform data → Manage Parameters →
-SourceFolderPath*. It needs a **trailing backslash**. Nothing else in the model
-hardcodes a path.
+**Sign in to Databricks.** The model reads
+`dss_demos.bi_tasks.*` over the `Databricks.Catalogs` connector, so the first
+refresh prompts for credentials (Entra ID / SSO, or a personal access token,
+depending on how the workspace is configured). **No token is stored anywhere in
+this project** and none should be added to it.
 
-**If Desktop rejects the query folders**, delete the `queryGroup:` lines from
-the table partitions and expressions, and the `PBI_QueryGroups` annotation from
-`model.tmdl`. That is the one construct here I could not verify against a real
-Desktop export — it only affects how queries are grouped in the Power Query
-navigator, so removing it costs nothing but the folder organisation.
+**Check the four connection parameters** (*Transform data → Manage
+Parameters*). They default to the workspace this was built against, which is
+almost certainly the right one — they are committed because
+`databricks-ingestion/SKILL.md` and decision 0009 both designate the host and
+HTTP path as non-secret *variables*, not secrets:
+
+| Parameter | Default | Note |
+|---|---|---|
+| `DatabricksHost` | `adb-7405610498713267.7.azuredatabricks.net` | no `https://`, no trailing slash |
+| `DatabricksHttpPath` | `/sql/1.0/warehouses/d754999d7948bd26` | leading slash, no trailing slash |
+| `DatabricksCatalog` | `dss_demos` | |
+| `DatabricksSchema` | `bi_tasks` | |
+
+`SourceFolderPath` is **gone** — there is no local file path in this model any
+more, and nothing to point at a checkout.
+
+> Note for whoever runs the next agent job: `DATABRICKS_HOST` arrives in the
+> Actions environment as `https://adb-….azuredatabricks.net/` — with the prefix
+> and trailing slash that `databricks-ingestion/SKILL.md` says it will not
+> have. Profiling code has to normalise it; the M parameter above stores the
+> bare hostname the connector wants. Worth either fixing the variable or
+> amending the skill.
 
 **Honest statement of confidence:** this TMDL and PBIR were hand-authored on a
 Linux CI runner with no Power BI Desktop available, so nothing here has ever
@@ -248,18 +332,75 @@ been round-tripped through Desktop. `validate_tmdl.py` confirms every
 cross-reference resolves, but that checks *consistency*, not that Desktop
 accepts every keyword. Expect the first open to surface syntax nits.
 
+What *was* verified for the Databricks change, so the uncertainty is scoped
+tightly: the seven tables and every column each query names were checked to
+exist against the live schema via the SQL Statement Execution API, and the
+model's headline figures were recomputed **in the warehouse** and reconcile to
+the penny with the pre-migration numbers in §2 (£162,950,104.45 total sales,
+67,628 orders, 63.34% online, £2,409.51 average order, 2013-01-01 → 2016-02-29,
+9 category tags, 441 bridge memberships, zero orphans on all six joins). So the
+*data* is confirmed identical and the *SQL semantics* are confirmed. What is
+**not** confirmed is the M syntax that gets Power Query there.
+
 Ranked by how unsure I am, with the fallback for each:
 
 | Construct | Where | If Desktop rejects it |
 |---|---|---|
+| **`Databricks.Catalogs` navigation shape** | `expressions.tmdl`, `DatabricksBiTasks` — **flagged at the same confidence level `queryGroup` was, and `queryGroup` did turn out to be wrong** | See the dedicated note below the table |
 | PBIR `visual.json` bodies | `.Report/definition/pages/*/visuals/` | Delete the offending `visuals/<name>/` folder — the page survives. Delete `ToyCompanySales.Report/` entirely and Desktop regenerates a blank report; you lose the draft layout and nothing else |
 | `sortDefinition` on a visual query | 20 visuals | Delete the `sortDefinition` block; the visual keeps its fields and just sorts by default |
 | `visualContainerObjects.title` | every non-card visual | Delete the block; the visual falls back to Power BI's auto-generated title |
-| `queryGroup` / `PBI_QueryGroups` | table partitions, `expressions.tmdl`, `model.tmdl` | Delete the `queryGroup:` lines and the annotation. Costs only the Power Query folder organisation |
 | `discourageImplicitMeasures` | `model.tmdl` | Delete the line. All 22 measures are explicit anyway, so this only removes the guard rail |
 
 The **semantic model is the valuable half** and the report layer is the
 speculative half. If the two fight, keep the model and rebuild the report.
+
+#### The `Databricks.Catalogs` navigation shape — flagged explicitly
+
+`databricks-ingestion/SKILL.md` documents this pattern and says in as many
+words that it has never been round-tripped through a real Desktop open. It is
+now the least-verified construct in the model, and it sits on the critical path
+in a way `queryGroup` did not: if `queryGroup` was wrong you lost folder
+organisation, whereas if this is wrong **no table loads at all**.
+
+```m
+Source = Databricks.Catalogs(DatabricksHost, DatabricksHttpPath, [EnableAutomaticProxyDiscovery = null]),
+NavigatedToCatalog = Source{[Name = DatabricksCatalog, Kind = "Catalog"]}[Data],
+NavigatedToSchema = NavigatedToCatalog{[Name = DatabricksSchema, Kind = "Schema"]}[Data]
+```
+
+Specifically unverified:
+
+1. **The function name and arity.** `Databricks.Catalogs(host, httpPath,
+   options)` is what the skill documents. Desktop's Databricks connector is
+   also reachable as `DatabricksMultiCloud.Catalogs` / `Databricks.Contents`
+   in some builds, and the options record differs between them.
+2. **`Kind = "Catalog"` / `Kind = "Schema"`.** The three-level Unity Catalog
+   navigation may surface as `Kind = "Database"` for the middle level, which is
+   what several older connectors use for a schema.
+3. **`[EnableAutomaticProxyDiscovery = null]`.** Taken verbatim from the skill.
+   It may need to be omitted, or paired with `Catalog`/`Database` fields that
+   make the navigation steps unnecessary.
+
+**How to fix it in one place if it is wrong**, which is the whole reason it is
+written this way: all seven queries go through `DatabricksBiTasks`, so correct
+that one expression and the entire model follows. Do **not** fix it query by
+query.
+
+The reliable way to get the right shape is to let Desktop generate it: *Get
+data → Azure Databricks*, enter the host and HTTP path, navigate to
+`dss_demos` → `bi_tasks` → any table, then read the M off that query in the
+Advanced Editor and paste the corrected first three lines into
+`DatabricksBiTasks`. Everything downstream — the column picks, renames,
+parsing, the two mandated fixes — is independent of how the connection is
+spelled.
+
+**Also unverified, and worth a look while you are in there:** whether the
+projection actually folds. `Table.SelectColumns` is the first step in every
+query specifically so it can, but only *View Native Query* in Desktop will
+confirm the `SELECT` reaching the warehouse is 12 columns wide on `sales`
+rather than all 33. Nothing is wrong if it does not fold — the fact is only
+212,774 rows — but it is free to check.
 
 ### 6.2 Test before trusting
 
@@ -340,9 +481,16 @@ required.
 
 Publish to the personal workspace, configure and test manual and scheduled
 refresh, validate the data in the Service, configure user access, then present.
-Note the refresh will fail in the Service until the source files are reachable
-from there — the current setup is a manual file drop into the repo (see
-`.claude/skills/sharepoint-data-ingestion/SKILL.md`).
+
+**Service refresh is now plausible, where it was not before.** The old file
+drop meant the Service had nothing to refresh from; sourcing from
+`dss_demos.bi_tasks.*` means the Service can reach the data directly. Expect to
+configure the semantic model's Databricks credentials in the workspace
+settings, and note that Azure Databricks over the built-in connector generally
+does **not** need an on-premises data gateway. Confirm the account used for
+scheduled refresh has `SELECT` on `dss_demos.bi_tasks` — the token this
+project's build ran under is scoped to `sql` + `unity-catalog` and lives only
+in the Actions environment; it is not in the model.
 
 ---
 
@@ -383,6 +531,8 @@ prefixes dropped, this model renamed, skill file corrected) and the
 | 2026-09-01 | Human, fifth Desktop attempt | New error class — every `.tmdl` file now parses syntactically clean (no more `InvalidLineType`), but Desktop rejected the whole project during deserialization with `Property 'description' is unknown and is not expected in the situation it appears.` — no file, no line number, since this is a later, whole-model semantic-validation pass, not the per-file line parser. Root cause: `///` compiles to TOM's `Description` property, and not every object type has one. Verified against the actual .NET API reference rather than guessing again: `relationship` and `annotation` do **not** support `Description`; `table`, `column`, `measure`, `expression`, and `model` do. `relationships.tmdl` had `///` blocks on 4 of its 7 relationships (all removed — the content was model rationale already largely duplicated in `docs/decisions/`, so nothing load-bearing was lost) and `model.tmdl` had one on the `__PBI_TimeIntelligenceEnabled` annotation (moved to a `///` on `model Model` itself, which does support it, so the explanation survives). Scanned every remaining `///` in the project by what object it attaches to — all land on `table`/`column`/`measure`/`expression`/`model`, all confirmed supported. Documented the supported/unsupported object list in `.claude/skills/pbip-tmdl-structure/SKILL.md` with a pointer to check the .NET API reference for any type not already confirmed, rather than assume. **Still not verified**: whether the project opens cleanly past this point — this was the first semantic-validation-stage error, so there could be more of this *class* even though the specific relationship/annotation cases are now fixed. |
 | 2026-09-01 | Human, sixth Desktop attempt | Same validation stage, different property: `Cannot resolve all the paths while de-serializing Database` — every `queryGroup:` on a partition/expression, and the `PBI_QueryGroups` annotation on `model.tmdl` that defines those groups by GUID, failed to resolve. This is exactly the low-confidence risk flagged in the model's own §6.1 (never verified against real Desktop) — its own recommended fix was to delete `queryGroup`/`PBI_QueryGroups` entirely, which costs nothing but Power Query navigator folder organization. Removed all 10 `queryGroup:` lines (7 tables + 3 further expressions, `SourceFolderPath` included = 4 in `expressions.tmdl`) and the `PBI_QueryGroups` annotation from `model.tmdl`. Reran both the blank-line-after-`///` scan and a `queryGroup` grep across the whole `SemanticModel/definition/` tree afterward — both clean, no leftover blank-line artifacts from the removal either. **Still not verified**: whether the project opens cleanly past this point. |
 
+| 2026-09-01 | issue #1, "sources from Databricks now" | Repointed all 7 Power Query sources from `Excel.Workbook(File.Contents(SourceFolderPath & …))` to `dss_demos.bi_tasks.*`. Retired `SourceFolderPath`; added `DatabricksHost` / `DatabricksHttpPath` / `DatabricksCatalog` / `DatabricksSchema` parameters, the shared `DatabricksBiTasks` navigation expression, and `fnParseMoney`. **Profiled the live warehouse first** rather than assuming the files had been copied faithfully — and they had not, in two ways that mattered: the warehouse `sales` table has 33 columns, not 35, because the two redundant `UnitPrice` copies are gone (so the positional `Column1..Column35` hack could be deleted — good), but the copy it kept is the **currency-text** one, not the numeric one Excel had (so money parsing became unavoidable — see §3.3). `TaxRate` and `AccountOpenedDate` likewise arrive as text now. Reconciled every headline figure in §2 against the warehouse before writing any M: all match to the penny. Also closed 3 gaps in `validate_tmdl.py` (one of them a regression this run introduced) and re-verified it against 5 injected faults. Flagged the `Databricks.Catalogs` navigation shape in §6.1 at the same confidence level `queryGroup` carried. Branch `claude/issue-1-20260901-1512`. |
+
 > **Note for the next run:** the first run's `NOTES.md` was left on its own
 > branch and was **not** on `main`, so this run had to recover it with
 > `git checkout origin/claude/issue-1-20260901-1007 -- projects/bi-task-1/NOTES.md`.
@@ -405,3 +555,9 @@ prefixes dropped, this model renamed, skill file corrected) and the
    and overwriting it destroys that. Diff against this branch first.
 4. Verify against the reconciliation figures in §2 if the model has been opened
    in Desktop by then, and against the bridge spot-check in §6.2.
+5. **If the first Databricks open failed**, fix only `DatabricksBiTasks` in
+   `expressions.tmdl` — §6.1 explains why the navigation is deliberately in one
+   place, and how to get the correct shape out of Desktop rather than guessing
+   at it a second time. Then record the real error text in the run log above,
+   the way the six Desktop attempts are recorded — that log is the only reason
+   this project stopped repeating the same syntax guesses.

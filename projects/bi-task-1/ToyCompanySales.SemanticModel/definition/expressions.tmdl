@@ -1,24 +1,87 @@
-/// Folder that holds the seven BI Task 1 source .xlsx files, with a trailing
-/// backslash. Point this at your local checkout of the repo, e.g.
-/// C:\repos\PBI-Agent\docs\sample-data\bi-task-1\
-/// Nothing else in the model hardcodes a path.
-expression SourceFolderPath = "C:\repos\PBI-Agent\docs\sample-data\bi-task-1\" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+/// Databricks workspace hostname, with no https:// prefix and no trailing
+/// slash, e.g. adb-1234567890123456.7.azuredatabricks.net
+///
+/// This is the workspace's address, not a credential. Power BI Desktop prompts
+/// for the sign-in itself the first time the model refreshes, so no token is
+/// stored anywhere in this project.
+expression DatabricksHost = "adb-7405610498713267.7.azuredatabricks.net" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
 
 	annotation PBI_ResultType = Text
 
+/// HTTP path of the SQL warehouse to query through, e.g.
+/// /sql/1.0/warehouses/abc123def4567890 - Databricks shows it on the
+/// warehouse's Connection details tab. Leading slash, no trailing slash.
+expression DatabricksHttpPath = "/sql/1.0/warehouses/d754999d7948bd26" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+
+	annotation PBI_ResultType = Text
+
+/// Unity Catalog catalog holding the seven BI Task 1 source tables.
+/// A parameter rather than a literal because the catalog is what changes
+/// between a dev and a production workspace - the table names below do not.
+expression DatabricksCatalog = "dss_demos" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+
+	annotation PBI_ResultType = Text
+
+/// Unity Catalog schema holding the seven BI Task 1 source tables.
+expression DatabricksSchema = "bi_tasks" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+
+	annotation PBI_ResultType = Text
+
+/// Staging only - not loaded to the model. Navigates Databricks.Catalogs down
+/// to the schema holding the seven source tables, so each table query below
+/// picks its own table out of the result in a single step.
+///
+/// Deliberately one shared expression rather than the same three navigation
+/// lines repeated in seven queries: this Catalog -> Schema navigation shape is
+/// the construct in this model least verified against a real Power BI Desktop
+/// open (see NOTES.md 6.1). Keeping it in one place makes a correction on
+/// first open a one-line fix instead of a seven-file one.
+expression DatabricksBiTasks =
+		let
+			Source = Databricks.Catalogs(DatabricksHost, DatabricksHttpPath, [EnableAutomaticProxyDiscovery = null]),
+			NavigatedToCatalog = Source{[Name = DatabricksCatalog, Kind = "Catalog"]}[Data],
+			NavigatedToSchema = NavigatedToCatalog{[Name = DatabricksSchema, Kind = "Schema"]}[Data],
+			Result = NavigatedToSchema
+		in
+			Result
+
+/// Staging only - not loaded to the model. Parses a currency-formatted text
+/// value into a number, used by Sales, Customer and stgStockItem.
+///
+/// Needed because every money column in dss_demos.bi_tasks is typed STRING and
+/// carries its formatting, and the currency symbol itself is corrupted: the
+/// pound sign was lost to a non-UTF8 encoding somewhere in the load into the
+/// warehouse, so "GBP 13.00" is stored literally as "?13.00". Verified with
+/// HEX() on the warehouse rather than inferred from a client rendering - the
+/// byte is 0x3F, a real ASCII question mark, not a mis-displayed pound sign.
+///
+/// Keeping only digits, "." and "-" rather than stripping one specific symbol
+/// means this keeps working unchanged whether a value arrives as "?13.00",
+/// "GBP13.00" or "13.00" - so fixing the encoding upstream cannot silently
+/// change any number in the model. The culture is stated explicitly so the
+/// decimal separator does not depend on the machine's regional settings.
+expression fnParseMoney = (input as nullable text) as nullable number =>
+		let
+			Trimmed = if input = null then null else Text.Trim(input),
+			DigitsOnly = if Trimmed = null or Trimmed = "" then null else Text.Select(Trimmed, {"0".."9", ".", "-"}),
+			Parsed = if DigitsOnly = null or DigitsOnly = "" then null else Number.FromText(DigitsOnly, "en-US"),
+			Result = Parsed
+		in
+			Result
+
 /// Staging only - not loaded to the model. Colour lookup, trimmed, merged into
-/// Product. Source: Warehouse Color.xlsx.
+/// Product. Source: dss_demos.bi_tasks.warehouse_color.
 expression stgColor =
 		let
-			Source = Excel.Workbook(File.Contents(SourceFolderPath & "Warehouse Color.xlsx"), null, true),
-			Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
-			PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars = true]),
+			Source = DatabricksBiTasks{[Name = "warehouse_color", Kind = "Table"]}[Data],
 			// ValidFrom / ValidTo / LastEditedBy are SCD bookkeeping and audit
 			// columns that nothing in the report uses, so they are not loaded.
-			SelectedColumns = Table.SelectColumns(PromotedHeaders, {"ColorID", "ColorName"}),
+			SelectedColumns = Table.SelectColumns(Source, {"ColorID", "ColorName"}),
 			// Assignment task 2: 21 of the 36 ColorName values carry leading
 			// and/or trailing whitespace (e.g. "Azure      ", "      Black").
 			// Trimming does not create duplicates - all 36 names stay unique.
+			// Re-verified against Databricks: still 21 of 36 padded, and still
+			// 36 distinct values after trimming.
 			TrimmedColorName = Table.TransformColumns(SelectedColumns, {{"ColorName", Text.Trim, type text}}),
 			TypedColumns = Table.TransformColumnTypes(TrimmedColorName, {
 				{"ColorID", Int64.Type},
@@ -29,14 +92,12 @@ expression stgColor =
 			Result
 
 /// Staging only - not loaded to the model. Supplier category lookup, merged
-/// into Supplier rather than snowflaked. Source: Purchasing Supplier
-/// Catalogue.xlsx.
+/// into Supplier rather than snowflaked.
+/// Source: dss_demos.bi_tasks.purchasing_supplier_catalogue.
 expression stgSupplierCategory =
 		let
-			Source = Excel.Workbook(File.Contents(SourceFolderPath & "Purchasing Supplier Catalogue.xlsx"), null, true),
-			Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
-			PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars = true]),
-			TypedColumns = Table.TransformColumnTypes(PromotedHeaders, {
+			Source = DatabricksBiTasks{[Name = "purchasing_supplier_catalogue", Kind = "Table"]}[Data],
+			TypedColumns = Table.TransformColumnTypes(Source, {
 				{"SupplierCategoryID", Int64.Type},
 				{"SupplierCategoryName", type text}
 			}),
@@ -46,19 +107,18 @@ expression stgSupplierCategory =
 
 /// Staging only - not loaded to the model. Raw stock item rows, consumed by
 /// three model queries: Product, Category and Bridge Product Category.
-/// Source: Warehouse Stock Item.xlsx.
+/// Source: dss_demos.bi_tasks.warehouse_stock_item.
 expression stgStockItem =
 		let
-			Source = Excel.Workbook(File.Contents(SourceFolderPath & "Warehouse Stock Item.xlsx"), null, true),
-			Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
-			PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars = true]),
+			Source = DatabricksBiTasks{[Name = "warehouse_stock_item", Kind = "Table"]}[Data],
 			// Only the columns the report needs. Dropped: Brand (18/227
 			// populated), Barcode (8/227), InternalComments (empty),
 			// MarketingComments, CustomFields and Tags (JSON blobs),
 			// SearchDetails (duplicate of StockItemName), IsChillerStock
-			// (unused), OuterPackageID, TaxRate (already on the fact),
+			// (unused), SupplierID and UnitPackageID (both already on the fact),
+			// OuterPackageID, TaxRate (already on the fact),
 			// TypicalWeightPerUnit, LeadTimeDays, QuantityPerOuter.
-			SelectedColumns = Table.SelectColumns(PromotedHeaders, {
+			SelectedColumns = Table.SelectColumns(Source, {
 				"StockItemID",
 				"StockItemName",
 				"ColorID",
@@ -69,7 +129,14 @@ expression stgStockItem =
 				"CategoryName2",
 				"CategoryName3"
 			}),
-			TypedColumns = Table.TransformColumnTypes(SelectedColumns, {
+			// Both price columns are STRING in the warehouse and carry currency
+			// formatting on all 227 rows ("?25.00"), where the earlier .xlsx
+			// extract had a numeric copy to lean on. See fnParseMoney.
+			ParsedPrices = Table.TransformColumns(SelectedColumns, {
+				{"UnitPrice", fnParseMoney, type nullable number},
+				{"RecommendedRetailPrice", fnParseMoney, type nullable number}
+			}),
+			TypedColumns = Table.TransformColumnTypes(ParsedPrices, {
 				{"StockItemID", Int64.Type},
 				{"StockItemName", type text},
 				{"ColorID", Int64.Type},
@@ -83,4 +150,3 @@ expression stgStockItem =
 			Result = TypedColumns
 		in
 			Result
-

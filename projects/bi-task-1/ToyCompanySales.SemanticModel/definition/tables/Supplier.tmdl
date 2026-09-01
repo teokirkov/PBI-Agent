@@ -1,7 +1,8 @@
-/// One row per supplier (13 rows). Source: Purchasing Supplier.xlsx with
-/// Purchasing Supplier Catalogue.xlsx merged in rather than snowflaked. Only 7
-/// of the 13 suppliers appear in Sales, so supplier visuals will show six
-/// zero-value members unless the visual filters to non-blank.
+/// One row per supplier (13 rows). Source: `purchasing_supplier` with
+/// `purchasing_supplier_catalogue` merged in rather than snowflaked, both in
+/// dss_demos.bi_tasks. Only 7 of the 13 suppliers appear in Sales, so supplier
+/// visuals will show six zero-value members unless the visual filters to
+/// non-blank.
 table 'Supplier'
 
 	/// Source column: SupplierID.
@@ -43,14 +44,12 @@ table 'Supplier'
 		mode: import
 		source =
 				let
-					Source = Excel.Workbook(File.Contents(SourceFolderPath & "Purchasing Supplier.xlsx"), null, true),
-					Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
-					PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars = true]),
+					Source = DatabricksBiTasks{[Name = "purchasing_supplier", Kind = "Table"]}[Data],
 					// Not loaded: the five bank-account columns (not needed by
 					// any KPI and mildly sensitive), contact person IDs,
 					// addresses, city IDs, phone/fax, WebsiteURL,
 					// DeliveryMethodID and InternalComments.
-					SelectedColumns = Table.SelectColumns(PromotedHeaders, {
+					SelectedColumns = Table.SelectColumns(Source, {
 						"SupplierID",
 						"SupplierName",
 						"SupplierCategoryID",
@@ -61,7 +60,8 @@ table 'Supplier'
 					// SupplierReference. It is NOT always leading - 8 of the 13
 					// values have it in front ("_AA20384") and 5 have it
 					// trailing ("082420938_") - so remove every "_" rather than
-					// trimming one end.
+					// trimming one end. Re-verified against Databricks: the same
+					// 8-leading / 5-trailing split still holds.
 					CleanedSupplierReference = Table.TransformColumns(SelectedColumns, {
 						{"SupplierReference", each Text.Remove(_, {"_"}), type text}
 					}),

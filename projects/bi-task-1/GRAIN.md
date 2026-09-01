@@ -14,15 +14,15 @@ that actually exist in the semantic model.
 
 | File | Rows | Grain — one row per… | Primary key |
 |---|---|---|---|
-| `Sales.xlsx` | 212,774 | **order line** | `OrderLineID` |
-| `Customer.xlsx` | 663 | customer | `CustomerID` |
-| `Warehouse Stock Item.xlsx` | 227 | stock item (product) | `StockItemID` |
-| `Purchasing Supplier.xlsx` | 13 | supplier | `SupplierID` |
-| `Purchasing Supplier Catalogue.xlsx` | 9 | supplier category | `SupplierCategoryID` |
-| `Warehouse Color.xlsx` | 36 | colour | `ColorID` |
-| `Warehouse Package Type.xlsx` | 14 | package type | `PackageTypeID` |
+| `sales` | 212,774 | **order line** | `OrderLineID` |
+| `customer` | 663 | customer | `CustomerID` |
+| `warehouse_stock_item` | 227 | stock item (product) | `StockItemID` |
+| `purchasing_supplier` | 13 | supplier | `SupplierID` |
+| `purchasing_supplier_catalogue` | 9 | supplier category | `SupplierCategoryID` |
+| `warehouse_color` | 36 | colour | `ColorID` |
+| `warehouse_package_type` | 14 | package type | `PackageTypeID` |
 
-### `Sales.xlsx` — the one that needs care
+### `sales` — the one that needs care
 
 Its stated grain is one order line, and `OrderLineID` is genuinely unique
 across all 212,774 rows. But the file is a **pre-joined flattening of four
@@ -43,7 +43,7 @@ computed at the fact's own grain as `Quantity × Unit Price`, which was verified
 to reconcile to the penny against the invoice header amount on all 64,819
 invoices. See `docs/decisions/0002`.
 
-### `Warehouse Stock Item.xlsx` — a hidden second grain
+### `warehouse_stock_item` — a hidden second grain
 
 The file's grain is one stock item, correctly. But `CategoryName1/2/3` are not
 three attributes of the product — they are a **flattening of a
@@ -75,10 +75,10 @@ Non-additive columns on the fact: `Unit Price` and `Tax Rate`, both set to
 | Table | Rows | Grain | Key | Source |
 |---|---|---|---|---|
 | `Date` | 1,461 | **one calendar day**, 2013-01-01 → 2016-12-31 | `Date` | DAX calculated table (`CALENDAR`) |
-| `Customer` | 663 | **one customer** | `Customer ID` | `Customer.xlsx` |
-| `Product` | 227 | **one stock item** | `Stock Item ID` | `Warehouse Stock Item.xlsx` + `Warehouse Color.xlsx` merged |
-| `Supplier` | 13 | **one supplier** | `Supplier ID` | `Purchasing Supplier.xlsx` + `Purchasing Supplier Catalogue.xlsx` merged |
-| `Package Type` | 14 | **one package type** | `Package Type ID` | `Warehouse Package Type.xlsx` |
+| `Customer` | 663 | **one customer** | `Customer ID` | `customer` |
+| `Product` | 227 | **one stock item** | `Stock Item ID` | `warehouse_stock_item` + `warehouse_color` merged |
+| `Supplier` | 13 | **one supplier** | `Supplier ID` | `purchasing_supplier` + `purchasing_supplier_catalogue` merged |
+| `Package Type` | 14 | **one package type** | `Package Type ID` | `warehouse_package_type` |
 | `Category` | 9 | **one product stock-group tag** | `Category` | union of `CategoryName1/2/3` |
 
 `Date` spans whole calendar years rather than the observed order-date range
