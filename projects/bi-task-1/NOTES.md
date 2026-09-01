@@ -10,14 +10,17 @@ starts here.
   warehouse — 7 tables (decision 0009). The original `.xlsx` file drop is
   retired; `validate_tmdl.py` now fails if an `Excel.Workbook` /
   `File.Contents` / `SourceFolderPath` construct reappears.
-- **Status:** **Semantic model complete and now sourced from Databricks;
-  report visuals are a first-pass draft.** Power Query, star schema,
-  relationships and all 22 measures are written and cross-reference-clean.
-  The source swap is verified against the live warehouse (schema and totals);
-  the *M syntax* that reaches it is not yet Desktop-verified — §6.1. 61 visuals across the 6 pages are
-  hand-authored PBIR JSON that has **never been opened in Power BI Desktop** —
-  treat the report layer as a starting point for a Desktop pass, not as
-  finished work (§6.1). Nothing is blocked; see §7 for what is open.
+- **Status:** **Semantic model complete, sourced from Databricks and verified
+  against real Power BI Desktop including a live refresh. The report opens and
+  exports, and is still a first-pass draft.** Power Query, star schema,
+  relationships and all 22 measures are written, cross-reference-clean and
+  confirmed loading real rows (§8, eighth and ninth Desktop attempts). The 61
+  hand-authored PBIR visuals now render — the two defects fixed on 2026-09-01
+  were found by a human reading the *exported PDF*, which is the first hard
+  evidence the report layer works end to end. It is still a draft in the sense
+  that formatting is default and §6.4's gaps are open, but it is no longer
+  unverified. The one construct in it that has never been through Desktop is
+  the Year slicer's default selection — §6.1. Nothing is blocked; see §7.
 
 ### Read these first
 
@@ -159,6 +162,95 @@ to check the refresh in Desktop:
 
 Per-year: 2013 £46,928,592.80 / 19,450 orders · 2014 £51,492,003.40 / 21,199 ·
 2015 £55,817,887.45 / 23,329 · 2016 (Jan–Feb) £8,711,620.80 / 3,650.
+
+### The Sales Trend & YoY page in its default state
+
+The Year slicer now opens with **2016** selected (see §2.1 for why). These are
+the four cards on that page, all recomputed in the warehouse — check them
+first if that page ever looks wrong:
+
+| Card | Year = 2016 (default) | What it is |
+|---|---|---|
+| `[Sales YTD]` | **£8,711,620.80** | all of 2016, i.e. 1 Jan – 29 Feb |
+| `[Sales MTD]` | **£4,099,480.35** | February 2016, the last month with data |
+| `[Sales LY (Like-for-Like)]` | **£8,863,884.50** | 1 Jan – 28 Feb 2015 |
+| `[Sales YoY %]` | **−1.7%** | −£152,263.70 ÷ £8,863,884.50 = −1.7178% |
+
+And the same four cards under every other slicer state, so a surprising number
+can be recognised rather than investigated:
+
+| Slicer | `[Sales YTD]` | `[Sales MTD]` | `[Sales LY]` | `[Sales YoY %]` |
+|---|---|---|---|---|
+| **2016** | £8,711,620.80 | £4,099,480.35 (Feb 16) | £8,863,884.50 | **−1.7%** |
+| 2015 | £55,817,887.45 | £4,607,182.15 (Dec 15) | £51,492,003.40 | +8.4% |
+| 2014 | £51,492,003.40 | £4,513,092.40 (Dec 14) | £46,928,592.80 | +9.7% |
+| 2013 | £46,928,592.80 | £3,728,103.40 (Dec 13) | *(blank)* | *(blank)* |
+| cleared | £8,711,620.80 | £4,099,480.35 (Feb 16) | *(blank)* | *(blank)* |
+
+Three of those are deliberate and none is a fault:
+
+- **2013's blank prior year** is correct — 2013 is the first year in the model,
+  so there is nothing to compare it against. Before this change that row of the
+  Overview year-on-year table showed a *change* of £46,928,592.80 against a
+  blank prior year, which was simply `[Total Sales]` leaking through a
+  subtraction from a blank.
+- **`[Sales MTD]` reads December** for any complete year and February for 2016.
+  It is month-to-date of the last month in the selected period, and for 2016
+  that month is February because that is where the data stops.
+- **`[Sales YTD]` with the slicer cleared reads £8,711,620.80, not the
+  £162,950,104.45 grand total.** That is what year-to-date means — the latest
+  year, to date — but it is the one card on the page that could be misread as a
+  whole-history figure. It is deliberately **not** guarded; see §7 item 4.
+
+### 2.1 Why the Year slicer has a default selection
+
+Found by a human inspecting the exported PDF, and worth recording in full
+because the number was plausible enough to survive a reading of the report.
+
+With no year selected, `[Sales YoY %]` read **599.8%**. `MAX ( 'Date'[Date] )`
+is 2016-12-31 — the calendar runs to year end, because assignment task 3
+mandates a generated contiguous calendar — which is past the last sales date,
+so `[Sales LY (Like-for-Like)]`'s like-for-like branch fired across the entire
+2013–2016 range at once. `SAMEPERIODLASTYEAR` shifted it to 2013–2015 and
+`'Date'[Month Day Number] <= 229` then kept January–February of **three
+separate years** as the denominator:
+
+```
+blended LY = 6,646,125.05 + 7,775,323.20 + 8,863,884.50 = £23,285,332.75
+YoY %      = (162,950,104.45 − 23,285,332.75) ÷ 23,285,332.75 = 599.7972%
+```
+
+Four years of sales divided by three two-month windows. The same evaluation
+produced the 599.8% on the total row of the Overview year-on-year table, where
+there is no slicer to default.
+
+So the fix is in two independent places, and **both are needed**:
+
+1. **The slicer default** (`stYearSlicer/visual.json`, a `filterConfig`
+   Categorical filter on `'Date'[Year] IN {2016}`) makes the page *open* in a
+   meaningful state. It does nothing for the Overview table.
+2. **The DAX guard** — `HASONEVALUE ( 'Date'[Year] )` on
+   `[Sales LY (Like-for-Like)]` and `[Sales YoY %]`, and
+   `NOT ISBLANK ( [Sales LY (Like-for-Like)] )` on `[Sales YoY Change]` —
+   makes the number *unavailable* rather than wrong whenever the filter context
+   does not resolve to one year. That covers the Overview total row, and it
+   covers the slicer being cleared.
+
+A year-on-year comparison is genuinely undefined over a blended multi-year
+range, so blank is the honest answer and not a cop-out. Every visual in the
+report that touches this measure family is either grouped by `'Date'[Year]`
+(`stCombo`, `ovByYear`, `ovYearTable` rows — one year each, unaffected) or a
+card on the sliced page, so nothing else changes.
+
+**`[Sales MTD]` was a different bug that looked like the same one.** It was
+blank in the no-selection state, but blanking it further would not have helped:
+`TOTALMTD` anchors on `MAX ( 'Date'[Date] )`, so with **Year = 2016 selected**
+it evaluated **December 2016** — an empty future month — and would have stayed
+blank after the slicer default was set. It is not ambiguous, it was pointing at
+the wrong month. So it is *not* guarded with `HASONEVALUE`; it is anchored to
+the last month that has data, using the same `PeriodEnd > LastSalesDate` test
+`[Sales LY (Like-for-Like)]` already uses (decision 0007). A selected month, or
+any complete earlier year, behaves exactly as it did before.
 
 ---
 
@@ -347,6 +439,7 @@ Ranked by how unsure I am, with the fallback for each:
 | Construct | Where | If Desktop rejects it |
 |---|---|---|
 | **`Databricks.Catalogs` navigation shape** | `expressions.tmdl`, `DatabricksBiTasks` — **flagged at the same confidence level `queryGroup` was, and `queryGroup` did turn out to be wrong** | See the dedicated note below the table |
+| **`filterConfig` on `stYearSlicer`** — the Year slicer's default selection of 2016 | `.Report/.../salestrend/visuals/stYearSlicer/visual.json` | **Delete the whole `"filterConfig"` block** (the last top-level property in that file). The slicer and the page both survive; you are back to no default selection, which is a two-click fix in Desktop — select 2016 and save. See the note below the table |
 | PBIR `visual.json` bodies | `.Report/definition/pages/*/visuals/` | Delete the offending `visuals/<name>/` folder — the page survives. Delete `ToyCompanySales.Report/` entirely and Desktop regenerates a blank report; you lose the draft layout and nothing else |
 | `sortDefinition` on a visual query | 20 visuals | Delete the `sortDefinition` block; the visual keeps its fields and just sorts by default |
 | `visualContainerObjects.title` | every non-card visual | Delete the block; the visual falls back to Power BI's auto-generated title |
@@ -354,6 +447,35 @@ Ranked by how unsure I am, with the fallback for each:
 
 The **semantic model is the valuable half** and the report layer is the
 speculative half. If the two fight, keep the model and rebuild the report.
+
+#### The slicer's default selection — the one new unverified shape
+
+Everything else in the report layer has now survived a real Desktop open (§8),
+so this is the only construct in it that has not. It is a visual-level
+`filterConfig` on the slicer itself, which is where Power BI persists a
+slicer's selected values:
+
+```json
+"type": "Categorical",
+"filter": { "Version": 2,
+  "From": [ { "Name": "d", "Entity": "Date", "Type": 0 } ],
+  "Where": [ { "Condition": { "In": {
+    "Expressions": [ { "Column": { "Expression": { "SourceRef": { "Source": "d" } },
+                                   "Property": "Year" } } ],
+    "Values": [ [ { "Literal": { "Value": "2016L" } } ] ] } } } ] }
+```
+
+Two things in it are written from the schema rather than from a round trip:
+the `"2016L"` literal suffix, which is how the semantic-query DSL spells an
+`int64` (`'Date'[Year]` is `int64`), and the optional `howCreated` property,
+which is **deliberately omitted** — a missing optional property cannot fail
+validation the way a wrong enum value can, and the report-level failure at
+attempt 9 was caused by exactly that class of mistake.
+
+The stakes are low and bounded, which is why it was worth attempting: the
+fallback in the table above costs two clicks, and **the DAX guard means a
+failure here cannot bring back the 599.8%** — it would only mean the page opens
+with the YoY figures blank instead of showing 2016.
 
 #### The `Databricks.Catalogs` navigation shape — flagged explicitly
 
@@ -457,9 +579,12 @@ are things deliberately left out of a hand-authored draft:
 - **Formatting is default** — no theme colours, data labels, axis titles,
   number-format overrides, conditional formatting or field-level renaming on
   the canvas.
-- **Only one slicer** (Year, on Sales Trend). The best-practices doc prefers
-  the filter pane to on-canvas slicers anyway, but cross-page slicer sync is
-  worth setting up.
+- **Only one slicer** (Year, on Sales Trend). It now defaults to 2016 — §2.1.
+  The best-practices doc prefers the filter pane to on-canvas slicers anyway,
+  but cross-page slicer sync is worth setting up, and this is the case that
+  argues for it: the Overview page's year-on-year table has no slicer of its
+  own, so it is the DAX guard rather than any report setting that keeps its
+  total row honest.
 - **No bookmarks, drillthrough, tooltips or page navigation.**
 - Textbox heights are estimates. Long captions may clip or scroll at Desktop's
   actual font metrics — the caveats panel on Data Quality is the most likely to
@@ -514,6 +639,22 @@ prefixes dropped, this model renamed, skill file corrected) and the
    most useful being: request the underlying product-to-stock-group table
    instead of the flattened `CategoryName1/2/3` columns, and investigate why
    unpicked orders rose from 2.31% to 6.71% of the book in three years.
+4. **Should `[Sales YTD]` be guarded too?** Flagged rather than changed. With
+   the slicer cleared it reads £8,711,620.80 — 2016 to date — not the
+   £162,950,104.45 grand total, because that *is* what year-to-date means. So
+   unlike `[Sales YoY %]` it is not wrong, only easy to misread as
+   whole-history on a card with no year label next to it. Two defensible
+   answers: leave it (a YTD card showing the latest year is conventional), or
+   wrap it in the same `HASONEVALUE ( 'Date'[Year] )` guard for consistency
+   with the rest of the Time Intelligence folder. Left alone because it was not
+   asked for and it returns a correct number; a one-line change either way.
+5. **`validate_tmdl_syntax.py` does not exist on `main`.** The run that wrote
+   it (the "update the artifact" run, 2026-09-01) was never merged and its
+   branch is gone, so the five Desktop-error regression checks it contained are
+   lost. This run replayed them as a throwaway script — clean, and verified
+   against injected faults — but they are again uncommitted. Rebuilding it is
+   the single cheapest guard against an eighth Desktop syntax failure; §8's run
+   log has one row per distinct error to rebuild it from.
 
 ---
 
@@ -533,9 +674,9 @@ prefixes dropped, this model renamed, skill file corrected) and the
 | 2026-09-01 | Human, seventh Desktop attempt — after the Databricks rewrite | New file, same disease family but a new variant: `expressions.tmdl` line 64, `UnknownKeyword: The keyword 'let' is neither a property nor an object in the current context!`. Root cause confirmed against Microsoft's own TMDL docs (`tmdl-overview`): "if multi-line, [an expression] must be located in the line immediately following the property or object declaration" — nothing but the full multi-line body may follow. `fnParseMoney`'s declaration line was `expression fnParseMoney = (input as nullable text) as nullable number =>`, putting the function signature *on* the declaration line before continuing to `let` on the next — a working single-line expression's header (`DatabricksBiTasks =`, nothing after `=`) was mistaken for license to also inline part of a value and continue it, which the docs explicitly don't allow. Fixed by moving the whole signature down: `expression fnParseMoney =` / next line `(input as nullable text) as nullable number =>` / then `let` as before. Checked the entire project (`expressions.tmdl` and every table) for any other `=>` — this was the only one. Reran the blank-line-after-`///` scan and the `queryGroup` grep too (both still clean, unaffected by this rewrite). **Still not verified**: whether the project opens cleanly past this point. |
 | 2026-09-01 | Human, eighth Desktop attempt | Past both TMDL parse errors, model loaded, refresh failed on every one of the 7 tables with the identical `Expression.Error: The key didn't match any rows in the table.` — the exact failure this section already predicted for the untested `Databricks.Catalogs` navigation shape. Root cause: `DatabricksBiTasks` navigated the first level with `Kind = "Catalog"`, but the connector's actual navigation table tags that level `Kind = "Database"` — confirmed against Microsoft's own Azure Databricks connector docs and a second independent example, both showing the identical code shape (`Source{[Name="powerbi",Kind="Database"]}[Data]`, then `Kind="Schema"`, then `Kind="Table"`). "Database" is Unity Catalog's older/internal name for what the UI calls a catalog — not a typo to second-guess. Also added `Catalog = null, Database = null, Implementation = "2.0"` to the `Databricks.Catalogs(...)` options record to match the confirmed-working example exactly, not just the one option this project's code already had. Fixed in the single shared `DatabricksBiTasks` expression — exactly why it was written once instead of duplicated across seven table files. All 7 tables' own `Kind="Table"` navigation was already correct (checked before assuming they needed the same fix). **Still not verified**: whether refresh now actually succeeds and pulls real rows — this fixes the navigation *path*, not proof the data lands correctly once found. |
 | 2026-09-01 | Human, ninth Desktop attempt | Data refresh confirmed working end to end (model status update: **semantic model fully verified against real Desktop, including live Databricks refresh**). Separately, opening the report gave a generic "Something went wrong / Failed to load the report" with no stack trace (unlike every TMDL error, this dialog carries only an Activity ID). Root cause found by comparing `ToyCompanySales.Report/definition/report.json` against the actual public schema file and an exact matching example in Microsoft's own `projects-report` documentation (same schema version, `.../report/1.0.0/schema.json`): `themeCollection.baseTheme` requires three properties — `name`, `reportVersionAtImport` (string), `type` (`"SharedResources"` \| `"RegisteredResources"`) — and this file only had `name`. Fixed by adding `"reportVersionAtImport": "5.55", "type": "SharedResources"`, taken directly from Microsoft's own worked example rather than invented. This is a report-*level* required-field failure, which plausibly explains a whole-report load failure rather than a single broken visual. Also wrote a small Node script checking every one of the 72 `page.json`/`visual.json` files for their own required fields (`name`, `displayName`, `displayOption` for pages; `name`, `position.{x,y,width,height}`, `visual.visualType` for visuals) — all clean, so this looks like an isolated, single-file bug rather than a systemic one. **Still not verified**: whether the report actually opens now — this fixes one confirmed schema violation, not a guarantee it's the only defect in 61 hand-authored visuals that have never been round-tripped. |
-
 | 2026-09-01 | issue #1, "sources from Databricks now" | Repointed all 7 Power Query sources from `Excel.Workbook(File.Contents(SourceFolderPath & …))` to `dss_demos.bi_tasks.*`. Retired `SourceFolderPath`; added `DatabricksHost` / `DatabricksHttpPath` / `DatabricksCatalog` / `DatabricksSchema` parameters, the shared `DatabricksBiTasks` navigation expression, and `fnParseMoney`. **Profiled the live warehouse first** rather than assuming the files had been copied faithfully — and they had not, in two ways that mattered: the warehouse `sales` table has 33 columns, not 35, because the two redundant `UnitPrice` copies are gone (so the positional `Column1..Column35` hack could be deleted — good), but the copy it kept is the **currency-text** one, not the numeric one Excel had (so money parsing became unavoidable — see §3.3). `TaxRate` and `AccountOpenedDate` likewise arrive as text now. Reconciled every headline figure in §2 against the warehouse before writing any M: all match to the penny. Also closed 3 gaps in `validate_tmdl.py` (one of them a regression this run introduced) and re-verified it against 5 injected faults. Flagged the `Databricks.Catalogs` navigation shape in §6.1 at the same confidence level `queryGroup` carried. Branch `claude/issue-1-20260901-1512`. |
 | 2026-09-01 | issue #1, "can I get a downloadable zip" | No authoring. Consolidation only: `claude/issue-1-20260901-1512` was never merged, so `main` still carried the **Excel/`SourceFolderPath`** model and a zip built from `main` would have shipped the superseded version. Took `projects/` and `docs/decisions/` from `1512` onto this branch, deliberately **keeping `main`'s `.github/workflows/claude.yml`** — `1512` predates commit `4d4b042`, the fix that makes the packaging step check out the branch the action actually committed to, so taking the workflow from `1512` would have broken the very artifact being asked for. Verified the six human Desktop fixes survived the transplant (`$schema` is `fabric/pbip/pbipProperties/…`, zero `queryGroup`/`PBI_QueryGroups`, zero blank-line-after-`///`; the `//` hits in the tree are all inside M source blocks, which is legitimate). `validate_tmdl.py` clean. Branch `claude/issue-1-20260901-1542`. |
+| 2026-09-01 | issue #1, "two fixes on the Sales Trend & YoY page" | **The report layer now opens in Desktop and exports** — the two defects fixed this run were found by a human reading the exported PDF, which retires the ninth attempt's "still not verified whether the report actually opens now". Both defects were the *same* root cause seen from two directions: with no year selected, `MAX ( 'Date'[Date] )` is 2016-12-31 (the calendar runs to year end by design), which is past the last sales date, so the like-for-like branch fired across the whole 2013–2016 range and divided four years of sales by three separate Jan–Feb windows — **599.8%**, reproduced to four significant figures against the warehouse (£23,285,332.75 denominator) before anything was changed. Fixed in two independent places because the slicer default cannot reach the Overview page's total row: a `filterConfig` default of 2016 on `stYearSlicer`, and `HASONEVALUE ( 'Date'[Year] )` on `[Sales LY (Like-for-Like)]` and `[Sales YoY %]`. **`[Sales MTD]` turned out not to be the same bug**: `TOTALMTD` anchors on the end of the calendar, so it was evaluating December 2016 and would have stayed blank *after* the slicer default was set — it is anchored to the last month with data instead of guarded, since blanking a blank fixes nothing. Also caught in passing: `[Sales YoY Change]` returned bare `[Total Sales]` wherever the prior year was blank, which showed 2013 as a £46,928,592.80 change against a blank prior year. All four cards' values in every slicer state recomputed in the warehouse and recorded in §2. Branch `claude/issue-1-20260901-1717`. |
 
 > **Note for the next run:** the first run's `NOTES.md` was left on its own
 > branch and was **not** on `main`, so this run had to recover it with
@@ -560,10 +701,17 @@ prefixes dropped, this model renamed, skill file corrected) and the
    old prefixed table names in their examples; take current names from §2.
 2. Run `python3 projects/bi-task-1/validate_tmdl.py` before **and** after any
    edit to the PBIP, so a break is attributable to this run rather than
-   inherited.
-3. **Ask before regenerating the report layer.** If the project has been opened
-   in Desktop since 2026-09-01, the `.Report/` JSON is now human-edited work
-   and overwriting it destroys that. Diff against this branch first.
+   inherited. It checks **names and cross-references only** — it is not a TMDL
+   parser and would not have caught any of the seven Desktop syntax failures in
+   the run log. Also replay those seven as a character-level scan (§7 item 5
+   explains why that scan keeps getting lost): blank line after a `///` block;
+   `//` at TMDL document level, but *not* inside an M `source =` or
+   `expression =` body where it is legitimate; `///` on a `relationship` or
+   `annotation`; `queryGroup` / `PBI_QueryGroups`; and content after `=` on a
+   declaration line whose value then continues on the next.
+3. **Ask before regenerating the report layer.** The report has been opened in
+   Desktop and exported to PDF, so the `.Report/` JSON is now partly
+   human-verified work and overwriting it destroys that. Diff first.
 4. Verify against the reconciliation figures in §2 if the model has been opened
    in Desktop by then, and against the bridge spot-check in §6.2.
 5. **If the first Databricks open failed**, fix only `DatabricksBiTasks` in

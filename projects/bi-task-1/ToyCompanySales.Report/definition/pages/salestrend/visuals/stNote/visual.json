@@ -20,7 +20,7 @@
                 "horizontalTextAlignment": "left",
                 "textRuns": [
                   {
-                    "value": "Growth is coming from order volume, not order size: orders grew 9.0% then 10.1% while average order value stayed within £40 of £2,410 across all four years. Seasonality is mild — February is the low month at 0.83× the average and July the high at 1.15×.",
+                    "value": "Growth is coming from order volume, not order size: orders grew 9.0% then 10.1% while average order value stayed within £40 of £2,410 across all four years. Seasonality is mild — February is the low month at 0.83× the average and July the high at 1.15×.  •  The Year slicer opens on 2016. Clear it and the prior-year and YoY figures go blank on purpose: a year-on-year comparison has no meaning across a blended 2013–2016 range.",
                     "textStyle": {
                       "fontSize": "11pt",
                       "color": "#605E5C",

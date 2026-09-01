@@ -59,7 +59,34 @@ table _Measures
 		formatString: "£"#,0.00
 		displayFolder: Sales\Time Intelligence
 
-	measure 'Sales MTD' = TOTALMTD ( [Total Sales], 'Date'[Date] )
+	/// Month-to-date sales, anchored to the last month that actually has data
+	/// rather than to the end of the Date table. The calendar runs to
+	/// 2016-12-31 (it has to - assignment task 3 mandates a generated
+	/// contiguous calendar), but sales stop on 2016-02-29, so a plain
+	/// TOTALMTD reports December 2016 - an empty future month - whenever the
+	/// selected period runs past the data, including under the obvious
+	/// "Year = 2016" selection. That is where the blank MTD card came from.
+	/// The guard is the same PeriodEnd > LastSalesDate test that
+	/// [Sales LY (Like-for-Like)] uses (docs/decisions/0007), so both
+	/// measures degrade the same way: when the period runs past the data,
+	/// this reports February 2016; otherwise it is a plain month-to-date and
+	/// a selected month or a complete earlier year behaves exactly as before.
+	measure 'Sales MTD' =
+			VAR LastSalesDate = [Last Sales Date]
+			VAR PeriodEnd =
+				MAX ( 'Date'[Date] )
+			VAR SelectedPeriodRunsPastData = PeriodEnd > LastSalesDate
+			RETURN
+				IF (
+					SelectedPeriodRunsPastData,
+					CALCULATE (
+						[Total Sales],
+						'Date'[Year] = YEAR ( LastSalesDate ),
+						'Date'[Month Number] = MONTH ( LastSalesDate ),
+						'Date'[Day Of Month] <= DAY ( LastSalesDate )
+					),
+					TOTALMTD ( [Total Sales], 'Date'[Date] )
+				)
 		formatString: "£"#,0.00
 		displayFolder: Sales\Time Intelligence
 
@@ -70,6 +97,15 @@ table _Measures
 	/// this trims last year to the same month-and-day; otherwise it is a plain
 	/// same-period-last-year. So 2015 vs 2014 still compares two whole years,
 	/// while 2016 vs 2015 compares January-February against January-February.
+	///
+	/// Guarded by HASONEVALUE ( 'Date'[Year] ). A year-on-year comparison is
+	/// only defined when the filter context resolves to one year: with no year
+	/// selected the like-for-like branch shifted the whole 2013-2016 range back
+	/// and cut each of the three resulting years at 29 February, producing a
+	/// denominator of three separate two-month windows (GBP 23,285,332.75) that
+	/// four whole years of sales were then divided by - which is where the
+	/// nonsensical 599.8% came from. Blank is the honest answer there, and it
+	/// is also what the total row of a year-on-year table should show.
 	measure 'Sales LY (Like-for-Like)' =
 			VAR LastSalesDate = [Last Sales Date]
 			VAR CutoffMonthDay =
@@ -80,29 +116,48 @@ table _Measures
 			VAR SelectedPeriodRunsPastData = PeriodEnd > LastSalesDate
 			RETURN
 				IF (
-					SelectedPeriodRunsPastData,
-					CALCULATE (
-						[Total Sales],
-						SAMEPERIODLASTYEAR ( 'Date'[Date] ),
-						'Date'[Month Day Number] <= CutoffMonthDay
-					),
-					CALCULATE (
-						[Total Sales],
-						SAMEPERIODLASTYEAR ( 'Date'[Date] )
+					HASONEVALUE ( 'Date'[Year] ),
+					IF (
+						SelectedPeriodRunsPastData,
+						CALCULATE (
+							[Total Sales],
+							SAMEPERIODLASTYEAR ( 'Date'[Date] ),
+							'Date'[Month Day Number] <= CutoffMonthDay
+						),
+						CALCULATE (
+							[Total Sales],
+							SAMEPERIODLASTYEAR ( 'Date'[Date] )
+						)
 					)
 				)
 		formatString: "£"#,0.00
 		displayFolder: Sales\Time Intelligence
 
-	measure 'Sales YoY Change' = [Total Sales] - [Sales LY (Like-for-Like)]
+	/// Blank whenever there is no prior-year figure to change from, rather than
+	/// falling back to bare [Total Sales]. Without this the 2013 row of the
+	/// year-on-year table read a change of GBP 46,928,592.80 against a blank
+	/// prior year and a blank percentage - 2013 is the first year in the model,
+	/// so it has nothing to be compared with.
+	measure 'Sales YoY Change' =
+			IF (
+				NOT ISBLANK ( [Sales LY (Like-for-Like)] ),
+				[Total Sales] - [Sales LY (Like-for-Like)]
+			)
 		formatString: "£"#,0.00
 		displayFolder: Sales\Time Intelligence
 
-	/// The assignment's "YOY sales" KPI, on a like-for-like basis.
+	/// The assignment's "YOY sales" KPI, on a like-for-like basis. The
+	/// single-year test is stated here as well as on [Sales LY
+	/// (Like-for-Like)]: DIVIDE would blank this anyway once the denominator
+	/// is blank, but a measure that reads correctly on its own is worth more
+	/// than one whose safety lives two measures away.
 	measure 'Sales YoY %' =
-			DIVIDE (
-				[Sales YoY Change],
-				[Sales LY (Like-for-Like)]
+			IF (
+				HASONEVALUE ( 'Date'[Year] ),
+				DIVIDE (
+					[Sales YoY Change],
+					[Sales LY (Like-for-Like)]
+				)
 			)
 		formatString: 0.0%;-0.0%;0.0%
 		displayFolder: Sales\Time Intelligence
