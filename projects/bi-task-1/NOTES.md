@@ -532,6 +532,7 @@ prefixes dropped, this model renamed, skill file corrected) and the
 | 2026-09-01 | Human, sixth Desktop attempt | Same validation stage, different property: `Cannot resolve all the paths while de-serializing Database` — every `queryGroup:` on a partition/expression, and the `PBI_QueryGroups` annotation on `model.tmdl` that defines those groups by GUID, failed to resolve. This is exactly the low-confidence risk flagged in the model's own §6.1 (never verified against real Desktop) — its own recommended fix was to delete `queryGroup`/`PBI_QueryGroups` entirely, which costs nothing but Power Query navigator folder organization. Removed all 10 `queryGroup:` lines (7 tables + 3 further expressions, `SourceFolderPath` included = 4 in `expressions.tmdl`) and the `PBI_QueryGroups` annotation from `model.tmdl`. Reran both the blank-line-after-`///` scan and a `queryGroup` grep across the whole `SemanticModel/definition/` tree afterward — both clean, no leftover blank-line artifacts from the removal either. **Still not verified**: whether the project opens cleanly past this point. |
 
 | 2026-09-01 | issue #1, "sources from Databricks now" | Repointed all 7 Power Query sources from `Excel.Workbook(File.Contents(SourceFolderPath & …))` to `dss_demos.bi_tasks.*`. Retired `SourceFolderPath`; added `DatabricksHost` / `DatabricksHttpPath` / `DatabricksCatalog` / `DatabricksSchema` parameters, the shared `DatabricksBiTasks` navigation expression, and `fnParseMoney`. **Profiled the live warehouse first** rather than assuming the files had been copied faithfully — and they had not, in two ways that mattered: the warehouse `sales` table has 33 columns, not 35, because the two redundant `UnitPrice` copies are gone (so the positional `Column1..Column35` hack could be deleted — good), but the copy it kept is the **currency-text** one, not the numeric one Excel had (so money parsing became unavoidable — see §3.3). `TaxRate` and `AccountOpenedDate` likewise arrive as text now. Reconciled every headline figure in §2 against the warehouse before writing any M: all match to the penny. Also closed 3 gaps in `validate_tmdl.py` (one of them a regression this run introduced) and re-verified it against 5 injected faults. Flagged the `Databricks.Catalogs` navigation shape in §6.1 at the same confidence level `queryGroup` carried. Branch `claude/issue-1-20260901-1512`. |
+| 2026-09-01 | issue #1, "can I get a downloadable zip" | No authoring. Consolidation only: `claude/issue-1-20260901-1512` was never merged, so `main` still carried the **Excel/`SourceFolderPath`** model and a zip built from `main` would have shipped the superseded version. Took `projects/` and `docs/decisions/` from `1512` onto this branch, deliberately **keeping `main`'s `.github/workflows/claude.yml`** — `1512` predates commit `4d4b042`, the fix that makes the packaging step check out the branch the action actually committed to, so taking the workflow from `1512` would have broken the very artifact being asked for. Verified the six human Desktop fixes survived the transplant (`$schema` is `fabric/pbip/pbipProperties/…`, zero `queryGroup`/`PBI_QueryGroups`, zero blank-line-after-`///`; the `//` hits in the tree are all inside M source blocks, which is legitimate). `validate_tmdl.py` clean. Branch `claude/issue-1-20260901-1542`. |
 
 > **Note for the next run:** the first run's `NOTES.md` was left on its own
 > branch and was **not** on `main`, so this run had to recover it with
@@ -541,6 +542,13 @@ prefixes dropped, this model renamed, skill file corrected) and the
 > a run finds no `NOTES.md` for a project that the issue thread clearly says has
 > one, check the other `claude/*` branches before concluding the work never
 > happened.
+>
+> **This has now happened twice.** As of 2026-09-01 the newest project state has
+> never lived on `main` — it has always been the tip of the most recent
+> `claude/*` branch. So: **check `git log --oneline origin/claude/*` before
+> assuming `main` is current**, and when transplanting between branches, take
+> `projects/` and `docs/` only — never `.github/`, which moves independently on
+> `main`.
 
 ### Next run should
 
