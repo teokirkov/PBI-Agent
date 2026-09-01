@@ -1,0 +1,45 @@
+{
+  "name": "ToyCo Sales",
+  "dataColors": [
+    "#2a78d6",
+    "#eb6834",
+    "#1baf7a",
+    "#eda100",
+    "#e87ba4",
+    "#008300",
+    "#4a3aa7",
+    "#e34948"
+  ],
+  "good": "#0ca30c",
+  "neutral": "#fab219",
+  "bad": "#d03b3b",
+  "maximum": "#2a78d6",
+  "center": "#f0efec",
+  "minimum": "#e34948",
+  "null": "#8a8478",
+  "firstLevelElements": "#1c1a17",
+  "secondLevelElements": "#5b564c",
+  "thirdLevelElements": "#e4ddcd",
+  "fourthLevelElements": "#8a8478",
+  "background": "#fffdf9",
+  "secondaryBackground": "#faf7f0",
+  "tableAccent": "#26417a",
+  "textClasses": {
+    "callout": {
+      "fontFace": "IBM Plex Mono",
+      "color": "#1c1a17"
+    },
+    "title": {
+      "fontFace": "IBM Plex Sans",
+      "color": "#1c1a17"
+    },
+    "header": {
+      "fontFace": "IBM Plex Sans",
+      "color": "#1c1a17"
+    },
+    "label": {
+      "fontFace": "IBM Plex Sans",
+      "color": "#1c1a17"
+    }
+  }
+}

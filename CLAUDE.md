@@ -123,7 +123,10 @@ deserves a human pass in Power BI Desktop — don't overstate confidence here.
    definition isn't fully pinned down by the brief is a §1 cross-roads.
 6. **Visuals / analysis (best effort)** — see §2's caveat on visuals; a
    written analysis in `projects/<project-name>/ANALYSIS.md` is usually more
-   reliable to produce well than report visuals.
+   reliable to produce well than report visuals. If asked to theme the
+   report (or nothing was specified and it's worth doing anyway), see
+   `.claude/skills/report-theming/SKILL.md` — this is the reliable half of
+   "make it look better," unlike the visuals themselves.
 7. **Self-check** — before writing up, walk the model-authoring portions of
    the Development Checklist in
    `docs/best-practices/power-bi-best-practices.md` (star schema, explicit
@@ -155,6 +158,9 @@ independently of this file:
 - `sharepoint-data-ingestion/` — the file-based fallback for the "small
   report sourced from files" exception, or a project whose data was
   committed to `docs/sample-data/` before Databricks access existed
+- `report-theming/` — the color/text theme (reliable) versus visual layout
+  (still the fragile part) split; the real Power BI Theme JSON schema; a
+  validated default palette to fall back on when no client brand is given
 - `best-practices/` — the team's Power BI best-practices reference
   (populated, and **authoritative**: where any other skill file disagrees
   with it, the best-practices doc wins). Read this early — ideally as part
