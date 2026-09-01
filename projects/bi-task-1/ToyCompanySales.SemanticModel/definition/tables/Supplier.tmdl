@@ -2,7 +2,7 @@
 /// Purchasing Supplier Catalogue.xlsx merged in rather than snowflaked. Only 7
 /// of the 13 suppliers appear in Sales, so supplier visuals will show six
 /// zero-value members unless the visual filters to non-blank.
-table 'Dim Supplier'
+table 'Supplier'
 
 	/// Source column: SupplierID.
 	column 'Supplier ID'
@@ -39,7 +39,7 @@ table 'Dim Supplier'
 		sourceColumn: Payment Days
 		summarizeBy: none
 
-	partition 'Dim Supplier' = m
+	partition 'Supplier' = m
 		mode: import
 		queryGroup: Model\Dimensions
 		source =

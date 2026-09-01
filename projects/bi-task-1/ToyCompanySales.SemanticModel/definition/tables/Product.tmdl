@@ -1,8 +1,8 @@
 /// One row per stock item (227 rows). Source: Warehouse Stock Item.xlsx with
 /// Warehouse Color.xlsx merged in rather than snowflaked. All 227 items sell.
 /// Category membership is NOT on this table - it is genuinely many-to-many and
-/// lives in Dim Category via Bridge Product Category (docs/decisions/0004).
-table 'Dim Product'
+/// lives in Category via Bridge Product Category (docs/decisions/0004).
+table 'Product'
 
 	/// Source column: StockItemID.
 	column 'Stock Item ID'
@@ -35,7 +35,7 @@ table 'Dim Product'
 	/// The product's full set of stock-group tags as one label, e.g.
 	/// "Computing Novelties, Mugs, Novelty Items". 12 distinct values. Every
 	/// product has exactly one, so this slices sales additively and its
-	/// subtotals add up to the grand total - unlike Dim Category, which
+	/// subtotals add up to the grand total - unlike Category, which
 	/// deliberately overlaps. Use this when a breakdown has to reconcile.
 	column 'Category Group'
 		dataType: string
@@ -43,7 +43,7 @@ table 'Dim Product'
 		summarizeBy: none
 
 	/// Source column: UnitPrice. The stock item's list price - not what was
-	/// charged. Actual charged price is Fact Sales[Unit Price].
+	/// charged. Actual charged price is Sales[Unit Price].
 	column 'List Price'
 		dataType: decimal
 		formatString: "£"#,0.00
@@ -57,7 +57,7 @@ table 'Dim Product'
 		sourceColumn: Recommended Retail Price
 		summarizeBy: none
 
-	partition 'Dim Product' = m
+	partition 'Product' = m
 		mode: import
 		queryGroup: Model\Dimensions
 		source =
@@ -77,7 +77,7 @@ table 'Dim Product'
 					// alphabetically non-decreasing across the three columns,
 					// and 94 repeat a single value three times). Collapsing them
 					// to their distinct set gives one additive label per
-					// product. The per-tag view lives in Dim Category.
+					// product. The per-tag view lives in Category.
 					AddedCategoryGroup = Table.AddColumn(ReplacedBlanks, "Category Group", each Text.Combine(List.Sort(List.Distinct({[CategoryName1], [CategoryName2], [CategoryName3]})), ", "), type text),
 					RemovedSourceColumns = Table.RemoveColumns(AddedCategoryGroup, {"ColorID", "CategoryName1", "CategoryName2", "CategoryName3"}),
 					RenamedColumns = Table.RenameColumns(RemovedSourceColumns, {

@@ -2,7 +2,7 @@
 /// pre-joined flattening of order header, order line, invoice and customer
 /// transaction. Only the order-line-grain columns are loaded - see the
 /// partition comments and docs/decisions/0002.
-table 'Fact Sales'
+table 'Sales'
 
 	/// Source column: OrderID. Degenerate dimension - 67,628 distinct values.
 	/// Drives the "unique order count" KPI via [Order Count].
@@ -21,7 +21,7 @@ table 'Fact Sales'
 		sourceColumn: Order Line ID
 		summarizeBy: none
 
-	/// Source column: CustomerID. Foreign key to Dim Customer.
+	/// Source column: CustomerID. Foreign key to Customer.
 	column 'Customer ID'
 		dataType: int64
 		formatString: 0
@@ -29,7 +29,7 @@ table 'Fact Sales'
 		sourceColumn: Customer ID
 		summarizeBy: none
 
-	/// Source column: StockItemID. Foreign key to Dim Product.
+	/// Source column: StockItemID. Foreign key to Product.
 	column 'Stock Item ID'
 		dataType: int64
 		formatString: 0
@@ -37,7 +37,7 @@ table 'Fact Sales'
 		sourceColumn: Stock Item ID
 		summarizeBy: none
 
-	/// Source column: SupplierID. Foreign key to Dim Supplier. Fully derivable
+	/// Source column: SupplierID. Foreign key to Supplier. Fully derivable
 	/// from StockItemID (identical on all 212,774 rows) but kept as a direct
 	/// fact-to-dimension key to keep the star flat - see docs/decisions/0006.
 	column 'Supplier ID'
@@ -47,7 +47,7 @@ table 'Fact Sales'
 		sourceColumn: Supplier ID
 		summarizeBy: none
 
-	/// Source column: PackageTypeID. Foreign key to Dim Package Type. Equals
+	/// Source column: PackageTypeID. Foreign key to Package Type. Equals
 	/// StockItem.UnitPackageID on all 212,774 rows (not OuterPackageID), so it
 	/// is the *unit* package. Kept direct - see docs/decisions/0006.
 	column 'Package Type ID'
@@ -58,7 +58,7 @@ table 'Fact Sales'
 		summarizeBy: none
 
 	/// Source column: OrderDate, parsed from text ("Tuesday, January 1, 2013").
-	/// The single analytical date of this model; relates to Dim Date.
+	/// The single analytical date of this model; relates to Date.
 	column 'Order Date'
 		dataType: dateTime
 		formatString: dd/MM/yyyy
@@ -118,7 +118,7 @@ table 'Fact Sales'
 		sourceColumn: Is Invoiced
 		summarizeBy: none
 
-	partition 'Fact Sales' = m
+	partition 'Sales' = m
 		mode: import
 		queryGroup: Model\Facts
 		source =

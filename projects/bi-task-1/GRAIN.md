@@ -61,7 +61,7 @@ tags. The true grain of that information is *one product-category membership*
 
 | Table | Rows | Grain | Key | Additive measures |
 |---|---|---|---|---|
-| `Fact Sales` | 212,774 | **one order line** — one product on one order | `Order Line ID` (degenerate) | `Quantity`, `Picked Quantity`, `Line Amount` |
+| `Sales` | 212,774 | **one order line** — one product on one order | `Order Line ID` (degenerate) | `Quantity`, `Picked Quantity`, `Line Amount` |
 
 `Order ID` is also a degenerate dimension on this table (67,628 distinct
 values), because there is no separate order header table — the "unique order
@@ -74,14 +74,14 @@ Non-additive columns on the fact: `Unit Price` and `Tax Rate`, both set to
 
 | Table | Rows | Grain | Key | Source |
 |---|---|---|---|---|
-| `Dim Date` | 1,461 | **one calendar day**, 2013-01-01 → 2016-12-31 | `Date` | DAX calculated table (`CALENDAR`) |
-| `Dim Customer` | 663 | **one customer** | `Customer ID` | `Customer.xlsx` |
-| `Dim Product` | 227 | **one stock item** | `Stock Item ID` | `Warehouse Stock Item.xlsx` + `Warehouse Color.xlsx` merged |
-| `Dim Supplier` | 13 | **one supplier** | `Supplier ID` | `Purchasing Supplier.xlsx` + `Purchasing Supplier Catalogue.xlsx` merged |
-| `Dim Package Type` | 14 | **one package type** | `Package Type ID` | `Warehouse Package Type.xlsx` |
-| `Dim Category` | 9 | **one product stock-group tag** | `Category` | union of `CategoryName1/2/3` |
+| `Date` | 1,461 | **one calendar day**, 2013-01-01 → 2016-12-31 | `Date` | DAX calculated table (`CALENDAR`) |
+| `Customer` | 663 | **one customer** | `Customer ID` | `Customer.xlsx` |
+| `Product` | 227 | **one stock item** | `Stock Item ID` | `Warehouse Stock Item.xlsx` + `Warehouse Color.xlsx` merged |
+| `Supplier` | 13 | **one supplier** | `Supplier ID` | `Purchasing Supplier.xlsx` + `Purchasing Supplier Catalogue.xlsx` merged |
+| `Package Type` | 14 | **one package type** | `Package Type ID` | `Warehouse Package Type.xlsx` |
+| `Category` | 9 | **one product stock-group tag** | `Category` | union of `CategoryName1/2/3` |
 
-`Dim Date` spans whole calendar years rather than the observed order-date range
+`Date` spans whole calendar years rather than the observed order-date range
 (2013-01-01 → 2016-02-29) so that time intelligence has complete years to work
 with. It is contiguous by construction, which matters here: the company never
 trades on a Sunday, so 165 days are absent from the order dates and a
@@ -94,7 +94,7 @@ distinct-date list would have silently broken `SAMEPERIODLASTYEAR`.
 | `Bridge Product Category` | 441 | **one product-to-category membership** | `Stock Item ID` + `Category` |
 
 94 products carry one tag, 52 carry two, 81 carry three. This table is hidden;
-report authors use `Dim Category[Category]`.
+report authors use `Category[Category]`.
 
 ### Measures
 
@@ -110,13 +110,13 @@ Every relationship is **many-to-one**, fact or bridge on the many side:
 
 | From (many) | To (one) | Direction |
 |---|---|---|
-| `Fact Sales[Order Date]` | `Dim Date[Date]` | single |
-| `Fact Sales[Customer ID]` | `Dim Customer[Customer ID]` | single |
-| `Fact Sales[Stock Item ID]` | `Dim Product[Stock Item ID]` | single |
-| `Fact Sales[Supplier ID]` | `Dim Supplier[Supplier ID]` | single |
-| `Fact Sales[Package Type ID]` | `Dim Package Type[Package Type ID]` | single |
-| `Bridge Product Category[Stock Item ID]` | `Dim Product[Stock Item ID]` | **both** |
-| `Bridge Product Category[Category]` | `Dim Category[Category]` | single |
+| `Sales[Order Date]` | `Date[Date]` | single |
+| `Sales[Customer ID]` | `Customer[Customer ID]` | single |
+| `Sales[Stock Item ID]` | `Product[Stock Item ID]` | single |
+| `Sales[Supplier ID]` | `Supplier[Supplier ID]` | single |
+| `Sales[Package Type ID]` | `Package Type[Package Type ID]` | single |
+| `Bridge Product Category[Stock Item ID]` | `Product[Stock Item ID]` | **both** |
+| `Bridge Product Category[Category]` | `Category[Category]` | single |
 
 Referential integrity was verified across all ten candidate joins in the source
 data: **zero orphans on every one**. The single bidirectional relationship is

@@ -8,54 +8,54 @@
 /// carried invoice, transaction and finalization dates, but all three are
 /// derivable from each other and within a day of the order date, so there are
 /// no role-playing date relationships to manage (docs/decisions/0007).
-relationship FactSales_OrderDate_to_DimDate
-	fromColumn: 'Fact Sales'.'Order Date'
-	toColumn: 'Dim Date'.Date
+relationship Sales_OrderDate_to_Date
+	fromColumn: 'Sales'.'Order Date'
+	toColumn: 'Date'.Date
 
-relationship FactSales_to_DimCustomer
-	fromColumn: 'Fact Sales'.'Customer ID'
-	toColumn: 'Dim Customer'.'Customer ID'
+relationship Sales_to_Customer
+	fromColumn: 'Sales'.'Customer ID'
+	toColumn: 'Customer'.'Customer ID'
 
-relationship FactSales_to_DimProduct
-	fromColumn: 'Fact Sales'.'Stock Item ID'
-	toColumn: 'Dim Product'.'Stock Item ID'
+relationship Sales_to_Product
+	fromColumn: 'Sales'.'Stock Item ID'
+	toColumn: 'Product'.'Stock Item ID'
 
-/// Direct fact-to-dimension rather than snowflaked through Dim Product, per
+/// Direct fact-to-dimension rather than snowflaked through Product, per
 /// docs/decisions/0006. Sales.SupplierID is identical to
 /// StockItem.SupplierID on all 212,774 rows, so both shapes give the same
 /// answer; this one keeps the star flat.
-relationship FactSales_to_DimSupplier
-	fromColumn: 'Fact Sales'.'Supplier ID'
-	toColumn: 'Dim Supplier'.'Supplier ID'
+relationship Sales_to_Supplier
+	fromColumn: 'Sales'.'Supplier ID'
+	toColumn: 'Supplier'.'Supplier ID'
 
 /// Also direct, per docs/decisions/0006. Sales.PackageTypeID matches
 /// StockItem.UnitPackageID (not OuterPackageID) on all 212,774 rows.
-relationship FactSales_to_DimPackageType
-	fromColumn: 'Fact Sales'.'Package Type ID'
-	toColumn: 'Dim Package Type'.'Package Type ID'
+relationship Sales_to_PackageType
+	fromColumn: 'Sales'.'Package Type ID'
+	toColumn: 'Package Type'.'Package Type ID'
 
 /// The only bidirectional relationship in the model, and a deliberate one.
-/// A product carries 1-3 category tags, so Dim Category reaches Fact Sales via
-/// Dim Category -> Bridge -> Dim Product -> Fact Sales. The Bridge -> Dim
-/// Product hop has to filter *back up* into Dim Product for that path to work,
-/// which single-direction cannot do.
+/// A product carries 1-3 category tags, so Category reaches Sales via
+/// Category -> Bridge -> Product -> Sales. The Bridge -> Product hop has to
+/// filter *back up* into Product for that path to work, which
+/// single-direction cannot do.
 ///
 /// Why this is safe rather than the usual bidirectional trap: the bridge
-/// touches only Dim Category and Dim Product, never the fact, so there is no
+/// touches only Category and Product, never the fact, so there is no
 /// filter loop and no ambiguous path. Total Sales at the grand total stays
 /// correct (GBP 162,950,104.45).
 ///
 /// What it does NOT protect against: category subtotals overlap by design and
 /// sum to roughly 1.63x the grand total, because multi-tagged products count
-/// under each tag. See Dim Category's description, docs/decisions/0004, and
+/// under each tag. See Category's description, docs/decisions/0004, and
 /// ANALYSIS.md. This relationship must be spot-checked in Desktop against
 /// those numbers before the report is published.
-relationship BridgeProductCategory_to_DimProduct
+relationship BridgeProductCategory_to_Product
 	fromColumn: 'Bridge Product Category'.'Stock Item ID'
-	toColumn: 'Dim Product'.'Stock Item ID'
+	toColumn: 'Product'.'Stock Item ID'
 	crossFilteringBehavior: bothDirections
 
-relationship BridgeProductCategory_to_DimCategory
+relationship BridgeProductCategory_to_Category
 	fromColumn: 'Bridge Product Category'.Category
-	toColumn: 'Dim Category'.Category
+	toColumn: 'Category'.Category
 

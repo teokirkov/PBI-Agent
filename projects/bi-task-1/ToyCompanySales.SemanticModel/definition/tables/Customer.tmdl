@@ -1,7 +1,7 @@
 /// One row per customer (663 rows). Source: Customer.xlsx, already
 /// denormalised - customer category and buying group are flattened in, so no
 /// further dimension tables are needed. 660 of the 663 have sales.
-table 'Dim Customer'
+table 'Customer'
 
 	/// Source column: CustomerID.
 	column 'Customer ID'
@@ -55,7 +55,7 @@ table 'Dim Customer'
 		sourceColumn: Account Opened Date
 		summarizeBy: none
 
-	partition 'Dim Customer' = m
+	partition 'Customer' = m
 		mode: import
 		queryGroup: Model\Dimensions
 		source =

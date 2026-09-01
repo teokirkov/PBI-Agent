@@ -3,7 +3,7 @@
 /// contiguous calendar matters here: the company never trades on a Sunday, so
 /// 165 days are missing from the order dates and a distinct-date list would
 /// silently break time intelligence.
-table 'Dim Date'
+table 'Date'
 	dataCategory: Time
 
 	column Date
@@ -124,13 +124,13 @@ table 'Dim Date'
 		sourceColumn: [Is Trading Day]
 		summarizeBy: none
 
-	partition 'Dim Date' = calculated
+	partition 'Date' = calculated
 		mode: import
 		source =
 				VAR MinOrderDate =
-					MIN ( 'Fact Sales'[Order Date] )
+					MIN ( 'Sales'[Order Date] )
 				VAR MaxOrderDate =
-					MAX ( 'Fact Sales'[Order Date] )
+					MAX ( 'Sales'[Order Date] )
 				VAR FirstDay =
 					DATE ( YEAR ( MinOrderDate ), 1, 1 )
 				VAR LastDay =
@@ -153,5 +153,5 @@ table 'Dim Date'
 						"Is Trading Day", WEEKDAY ( [Date], 2 ) <> 7
 					)
 
-	annotation PBI_Id = DimDate
+	annotation PBI_Id = Date
 

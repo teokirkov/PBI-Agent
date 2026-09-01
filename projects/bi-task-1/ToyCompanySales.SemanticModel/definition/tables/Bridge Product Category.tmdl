@@ -2,9 +2,9 @@
 /// 227 products, 1 to 3 tags each). Recovers the many-to-many that
 /// Warehouse Stock Item.xlsx flattened into CategoryName1/2/3.
 ///
-/// The whole table is hidden - report authors should use Dim Category[Category]
-/// and Dim Product's attributes, never the bridge directly. Its relationship to
-/// Dim Product is bidirectional by necessity (that is what makes a category
+/// The whole table is hidden - report authors should use Category[Category]
+/// and Product's attributes, never the bridge directly. Its relationship to
+/// Product is bidirectional by necessity (that is what makes a category
 /// filter reach the fact); this is the one deliberate exception to the team's
 /// avoid-bidirectional rule and is recorded in docs/decisions/0004.
 table 'Bridge Product Category'

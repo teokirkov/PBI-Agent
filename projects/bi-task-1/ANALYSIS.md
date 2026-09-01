@@ -125,7 +125,7 @@ broken; it is not.
 The company **never trades on a Sunday** — all 165 missing calendar days in the
 window are Sundays, without exception. Saturday runs at about half a weekday
 (£14.8m against £29–30m for each of Monday–Friday). Monday to Friday are within
-4% of each other. This is encoded as `Dim Date[Is Trading Day]`, and it is why
+4% of each other. This is encoded as `Date[Is Trading Day]`, and it is why
 the Date dimension had to be a generated contiguous calendar rather than a
 distinct list of order dates — otherwise `SAMEPERIODLASTYEAR` would have been
 walking a calendar with holes in it.
@@ -161,7 +161,7 @@ The evidence is not ambiguous:
   domains of 5, 6 and 7.
 
 So 227 products carry **441 category memberships** (94 products have one tag, 52
-have two, 81 have three), and the model reconstructs that as `Dim Category` +
+have two, 81 have three), and the model reconstructs that as `Category` +
 `Bridge Product Category` (`docs/decisions/0004`).
 
 **Three things follow, and all three need saying out loud on the report page:**
@@ -172,7 +172,7 @@ have two, 81 have three), and the model reconstructs that as `Dim Category` +
    Every individual category figure is right; the column just does not
    reconcile, and Power BI's total row will correctly show £162.95m while the
    visible rows sum to more. Anyone who needs a breakdown that reconciles must
-   use `Dim Product[Category Group]` instead, which gives each product exactly
+   use `Product[Category Group]` instead, which gives each product exactly
    one label built from its full tag set.
 
 2. **Picking any one of the three columns as "the" category would have

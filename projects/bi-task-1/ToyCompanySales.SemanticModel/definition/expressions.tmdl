@@ -8,7 +8,7 @@ expression SourceFolderPath = "C:\repos\PBI-Agent\docs\sample-data\bi-task-1\" m
 	annotation PBI_ResultType = Text
 
 /// Staging only - not loaded to the model. Colour lookup, trimmed, merged into
-/// Dim Product. Source: Warehouse Color.xlsx.
+/// Product. Source: Warehouse Color.xlsx.
 expression stgColor =
 		let
 			Source = Excel.Workbook(File.Contents(SourceFolderPath & "Warehouse Color.xlsx"), null, true),
@@ -31,7 +31,7 @@ expression stgColor =
 	queryGroup: Staging
 
 /// Staging only - not loaded to the model. Supplier category lookup, merged
-/// into Dim Supplier rather than snowflaked. Source: Purchasing Supplier
+/// into Supplier rather than snowflaked. Source: Purchasing Supplier
 /// Catalogue.xlsx.
 expression stgSupplierCategory =
 		let
@@ -48,7 +48,7 @@ expression stgSupplierCategory =
 	queryGroup: Staging
 
 /// Staging only - not loaded to the model. Raw stock item rows, consumed by
-/// three model queries: Dim Product, Dim Category and Bridge Product Category.
+/// three model queries: Product, Category and Bridge Product Category.
 /// Source: Warehouse Stock Item.xlsx.
 expression stgStockItem =
 		let

@@ -7,9 +7,9 @@
 /// multi-tagged products are counted under each of their tags. That is normal
 /// for tag analysis, and it is why Power BI's total row will not equal the sum
 /// of the rows. For a breakdown that must reconcile, use
-/// Dim Product[Category Group] instead. Full reasoning: docs/decisions/0004
+/// Product[Category Group] instead. Full reasoning: docs/decisions/0004
 /// and projects/bi-task-1/ANALYSIS.md.
-table 'Dim Category'
+table 'Category'
 
 	/// Source columns: CategoryName1, CategoryName2, CategoryName3 (unioned).
 	/// Clothing, Computing Novelties, Furry Footwear, Mugs, Novelty Items,
@@ -19,7 +19,7 @@ table 'Dim Category'
 		sourceColumn: Category
 		summarizeBy: none
 
-	partition 'Dim Category' = m
+	partition 'Category' = m
 		mode: import
 		queryGroup: Model\Dimensions
 		source =

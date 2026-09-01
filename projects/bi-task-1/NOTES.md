@@ -28,7 +28,7 @@ starts here.
 |---|------|--------|
 | 1 | Load the data sources | **Done** — 7 files → 4 model queries + 3 staging expressions |
 | 2 | Power Query: remove `_` from `SupplierReference`; trim `ColorName` | **Done** — both, see §3 |
-| 3 | Star schema; Date dimension as a **calculated table** | **Done** — `Dim Date` is a DAX `CALENDAR()` calculated table, as mandated |
+| 3 | Star schema; Date dimension as a **calculated table** | **Done** — `Date` is a DAX `CALENDAR()` calculated table, as mandated |
 | 4 | Document granularity of every table in a separate file | **Done** — `GRAIN.md` |
 | 5 | The 9 main KPIs | **Done** as measures; **not** as visuals |
 | 6 | Publish to Power BI Service | **Human follow-up** — out of agent scope |
@@ -40,44 +40,45 @@ starts here.
 |---|---|
 | Unique order count | `[Order Count]` = 67,628 |
 | Average order amount in £ | `[Average Order Amount]` = £2,409.51 |
-| YTD, MTD sales — all and by category | `[Sales YTD]`, `[Sales MTD]`, sliced by `Dim Customer[Sales Channel]` (decision 0005) |
+| YTD, MTD sales — all and by category | `[Sales YTD]`, `[Sales MTD]`, sliced by `Customer[Sales Channel]` (decision 0005) |
 | YOY sales | `[Sales YoY %]`, `[Sales YoY Change]`, `[Sales LY (Like-for-Like)]` (decision 0007) |
 | Online sales as % of overall | `[Online Sales %]` = 63.34%, plus `[Online Sales]` / `[Retail Sales]` |
 | TOP customers by orders and turnover | `[Customer Rank by Sales]`, `[Customer Rank by Orders]` + `[Total Sales]` / `[Order Count]` |
-| Quantity and Sales by Supplier Name and Supplier Category Name | `[Total Quantity]` / `[Total Sales]` by `Dim Supplier` |
-| Quantity and Sales by Category Names | by `Dim Category[Category]` — **overlapping by design**, decision 0004 |
-| Quantity and Sales by Package Types | by `Dim Package Type[Package Type]` |
+| Quantity and Sales by Supplier Name and Supplier Category Name | `[Total Quantity]` / `[Total Sales]` by `Supplier` |
+| Quantity and Sales by Category Names | by `Category[Category]` — **overlapping by design**, decision 0004 |
+| Quantity and Sales by Package Types | by `Package Type[Package Type]` |
 
 ---
 
 ## 2. The model as built
 
 ```
-                   Dim Date        Dim Customer
+                      Date          Customer
                        |                |
                        v                v
                  +---------------------------+
-   Dim Supplier ->|       Fact Sales          |<- Dim Package Type
+     Supplier -->|           Sales           |<-- Package Type
                  |  (one row per order line) |
                  +---------------------------+
-                             ^
-                             |
-                        Dim Product  <--(bi-directional)--  Bridge Product
-                                                            Category
-                                                                 |
-                                                                 v
-                                                            Dim Category
+                              ^
+                              |
+                           Product <--(bi-directional)--+
+                                                        |
+                                            Bridge Product Category
+                                                        |
+                                                        v
+                                                     Category
 ```
 
 | Table | Rows | Grain | Query type |
 |---|---|---|---|
-| `Fact Sales` | 212,774 | one order line | M |
-| `Dim Date` | 1,461 | one day, 2013-01-01 → 2016-12-31 | **DAX calculated table** |
-| `Dim Customer` | 663 | one customer | M |
-| `Dim Product` | 227 | one stock item (colour merged in) | M |
-| `Dim Supplier` | 13 | one supplier (category merged in) | M |
-| `Dim Package Type` | 14 | one package type | M |
-| `Dim Category` | 9 | one product stock-group tag | M |
+| `Sales` | 212,774 | one order line | M |
+| `Date` | 1,461 | one day, 2013-01-01 → 2016-12-31 | **DAX calculated table** |
+| `Customer` | 663 | one customer | M |
+| `Product` | 227 | one stock item (colour merged in) | M |
+| `Supplier` | 13 | one supplier (category merged in) | M |
+| `Package Type` | 14 | one package type | M |
+| `Category` | 9 | one product stock-group tag | M |
 | `Bridge Product Category` | 441 | one product-category membership | M (hidden) |
 | `_Measures` | 1 | none — holds the 22 measures | DAX calculated table |
 
@@ -116,7 +117,7 @@ Per-year: 2013 £46,928,592.80 / 19,450 orders · 2014 £51,492,003.40 / 21,199 
 
 Both confirmed necessary against the actual data.
 
-1. **`SupplierReference`** (`Dim Supplier`). **Correction to the earlier
+1. **`SupplierReference`** (`Supplier`). **Correction to the earlier
    profile**, which said the underscore was always leading — it is not. 8 of
    the 13 values carry it in front (`_AA20384`), 5 carry it trailing
    (`082420938_`). A `Text.TrimStart(_, "_")` would have silently left five
@@ -137,7 +138,7 @@ logged permanently:
 |---|---|---|
 | Q1 | Sales = `Quantity × Unit Price`, ex-tax, line grain | `docs/decisions/0002` |
 | Q2 | Include uninvoiced orders; surface them in a visual and the analysis | `docs/decisions/0003` |
-| Q3 | Categories are a many-to-many → `Dim Category` + bridge, plus an additive `Category Group` | `docs/decisions/0004` |
+| Q3 | Categories are a many-to-many → `Category` + bridge, plus an additive `Category Group` | `docs/decisions/0004` |
 | Q4 | "Categories" in the YTD/MTD KPI = `OnlineSalesConditional` → `Sales Channel` | `docs/decisions/0005` |
 | Q5 | Flat star — Supplier and Package Type join the fact directly | `docs/decisions/0006` |
 | Q6 | Like-for-like YoY, prior year cut at the same month/day | `docs/decisions/0007` |
@@ -167,11 +168,11 @@ only (the Desktop/Service/Release items are in §6).
 | One-to-many Dim→Fact, star schema | Yes — all 7 relationships are many-to-one |
 | Avoid bi-directional filters | **One deliberate exception** — the bridge. Documented in decision 0004; **needs a correctness test in Desktop**, see §6.2 |
 | Avoid many-to-many | **One, inherent to the source data.** Same exception, same test |
-| Be aware of report locale | Yes — model culture `en-GB`; dates parsed with an explicit `en-US` culture (the source format is US long-date); `FORMAT` calls in `Dim Date` pass `"en-GB"` explicitly so month and day names do not shift with the machine |
-| Custom Date table | Yes — `Dim Date`, a DAX calculated table per the brief, marked as a date table (`dataCategory: Time` + `isKey` on `Date`) |
+| Be aware of report locale | Yes — model culture `en-GB`; dates parsed with an explicit `en-US` culture (the source format is US long-date); `FORMAT` calls in `Date` pass `"en-GB"` explicitly so month and day names do not shift with the machine |
+| Custom Date table | Yes — `Date`, a DAX calculated table per the brief, marked as a date table (`dataCategory: Time` + `isKey` on `Date`) |
 | Load only required columns | Yes — 35 source columns on `Sales.xlsx` reduce to 12; 36 on `Customer.xlsx` to 7; 24 on `Warehouse Stock Item.xlsx` to 9; 26 on `Purchasing Supplier.xlsx` to 5 |
 | Hide fields not used in the report | Yes — every FK, `Line Amount`, `Quantity`, `Picked Quantity`, `Tax Rate`, `Order Date`, and the whole bridge table |
-| Calculated column in Power Query, not DAX | Yes — `Line Amount` and `Category Group` are both M. The only DAX-computed table is `Dim Date`, which the brief mandates |
+| Calculated column in Power Query, not DAX | Yes — `Line Amount` and `Category Group` are both M. The only DAX-computed table is `Date`, which the brief mandates |
 | Auto-summarisation off for non-additive fields | Yes — `summarizeBy: none` on every ID, price and rate |
 | Business names on fields and tables | Yes — renamed in Power Query, not cosmetically. Every renamed column carries its source name in a TMDL `///` description |
 | Don't store timestamps | Yes — `PickingCompletedWhen` and `ConfirmedDeliveryTime` both carry times and are not loaded |
@@ -181,7 +182,7 @@ only (the Desktop/Service/Release items are in §6).
 | Always format DAX | Yes |
 | No implicit measures | Yes — and enforced at model level with `discourageImplicitMeasures`, not just by convention |
 | Configure the default page | Yes — `activePageName: overview` |
-| Could DAX transformations be Power Query instead? | Checked — only `Dim Date` is DAX, and only because the brief requires it |
+| Could DAX transformations be Power Query instead? | Checked — only `Date` is DAX, and only because the brief requires it |
 
 ### Dataset size
 
@@ -227,10 +228,10 @@ nothing — it holds six empty pages and no visuals.
 **The category bridge.** It is the model's only bidirectional relationship and
 only many-to-many. Check in Desktop that:
 - `[Total Sales]` with no category filter = **£162,950,104.45**
-- a table of `Dim Category[Category]` × `[Total Sales]` sums to
+- a table of `Category[Category]` × `[Total Sales]` sums to
   **£265,811,434.65** across the rows while the total row still shows
   £162,950,104.45 — that discrepancy is correct and expected (decision 0004)
-- `Dim Product[Category Group]` × `[Total Sales]` **does** sum to the grand
+- `Product[Category Group]` × `[Total Sales]` **does** sum to the grand
   total
 
 ### 6.3 Desktop settings (pre-development checklist)
@@ -281,7 +282,7 @@ choices for the next run or the human, not unanswered cross-roads.
    business names with "no `DIM`/`FACT` prefix needed", while
    `.claude/skills/pbip-tmdl-structure/SKILL.md` mandates `Fact <Subject>` /
    `Dim <Subject>`. The best-practices doc is supposed to win on conflict, but
-   the previous run proposed `Fact Sales` / `Dim Customer` naming and that
+   the previous run proposed `Sales` / `Customer` naming and that
    proposal was approved on issue #1, so this model uses the prefixes. If the
    best-practices reading is the intended one, renaming is cheap now and
    expensive after visuals are bound to field names. **One of the two documents
@@ -306,7 +307,7 @@ choices for the next run or the human, not unanswered cross-roads.
 | Date | Run | What happened |
 |---|---|---|
 | 2026-09-01 | issue #1, "Start BI Task 1" | Discover + Profile only, as instructed. Profiled all 7 files, verified referential integrity and grain. Stopped before modeling; six questions posted. Branch `claude/issue-1-20260901-1007`. |
-| 2026-09-01 | issue #1, answers to Q1–Q6 | Built the semantic model: PBIP scaffold, 4 model queries + 3 staging expressions, 7 relationships, `Dim Date` calculated table, 22 measures. Logged decisions 0002–0007. Wrote `GRAIN.md` and `ANALYSIS.md`, rewrote this file. Determined Q3 from the data (categories are a many-to-many). Corrected the earlier `SupplierReference` finding. Report visuals not built. Branch `claude/issue-1-20260901-1026`. |
+| 2026-09-01 | issue #1, answers to Q1–Q6 | Built the semantic model: PBIP scaffold, 4 model queries + 3 staging expressions, 7 relationships, `Date` calculated table, 22 measures. Logged decisions 0002–0007. Wrote `GRAIN.md` and `ANALYSIS.md`, rewrote this file. Determined Q3 from the data (categories are a many-to-many). Corrected the earlier `SupplierReference` finding. Report visuals not built. Branch `claude/issue-1-20260901-1026`. |
 
 > **Note for the next run:** the first run's `NOTES.md` was left on its own
 > branch and was **not** on `main`, so this run had to recover it with

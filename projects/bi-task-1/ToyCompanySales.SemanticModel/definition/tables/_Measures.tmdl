@@ -8,31 +8,31 @@ table _Measures
 	/// This is the model's single definition of "sales" (docs/decisions/0002)
 	/// and every other sales measure derives from it. Includes the 2,809
 	/// never-invoiced orders (docs/decisions/0003).
-	measure 'Total Sales' = SUM ( 'Fact Sales'[Line Amount] )
+	measure 'Total Sales' = SUM ( 'Sales'[Line Amount] )
 		formatString: "£"#,0.00
 		displayFolder: Sales
 
 	/// Units ordered. Note this is ordered, not picked - see [Total Quantity
 	/// Picked] for what actually left the warehouse.
-	measure 'Total Quantity' = SUM ( 'Fact Sales'[Quantity] )
+	measure 'Total Quantity' = SUM ( 'Sales'[Quantity] )
 		formatString: #,0
 		displayFolder: Sales
 
-	measure 'Total Quantity Picked' = SUM ( 'Fact Sales'[Picked Quantity] )
+	measure 'Total Quantity Picked' = SUM ( 'Sales'[Picked Quantity] )
 		formatString: #,0
 		displayFolder: Sales
 
 	/// The assignment's "unique order count" KPI. Distinct orders, not order
 	/// lines - one order averages 3.15 lines.
-	measure 'Order Count' = DISTINCTCOUNT ( 'Fact Sales'[Order ID] )
+	measure 'Order Count' = DISTINCTCOUNT ( 'Sales'[Order ID] )
 		formatString: #,0
 		displayFolder: Sales
 
-	measure 'Order Line Count' = COUNTROWS ( 'Fact Sales' )
+	measure 'Order Line Count' = COUNTROWS ( 'Sales' )
 		formatString: #,0
 		displayFolder: Sales
 
-	measure 'Customer Count' = DISTINCTCOUNT ( 'Fact Sales'[Customer ID] )
+	measure 'Customer Count' = DISTINCTCOUNT ( 'Sales'[Customer ID] )
 		formatString: #,0
 		displayFolder: Sales
 
@@ -49,17 +49,17 @@ table _Measures
 	/// worth putting on the report as an "as at" caption.
 	measure 'Last Sales Date' =
 			CALCULATE (
-				MAX ( 'Fact Sales'[Order Date] ),
+				MAX ( 'Sales'[Order Date] ),
 				REMOVEFILTERS ()
 			)
 		formatString: dd/MM/yyyy
 		displayFolder: Sales\Time Intelligence
 
-	measure 'Sales YTD' = TOTALYTD ( [Total Sales], 'Dim Date'[Date] )
+	measure 'Sales YTD' = TOTALYTD ( [Total Sales], 'Date'[Date] )
 		formatString: "£"#,0.00
 		displayFolder: Sales\Time Intelligence
 
-	measure 'Sales MTD' = TOTALMTD ( [Total Sales], 'Dim Date'[Date] )
+	measure 'Sales MTD' = TOTALMTD ( [Total Sales], 'Date'[Date] )
 		formatString: "£"#,0.00
 		displayFolder: Sales\Time Intelligence
 
@@ -76,19 +76,19 @@ table _Measures
 				MONTH ( LastSalesDate ) * 100
 					+ DAY ( LastSalesDate )
 			VAR PeriodEnd =
-				MAX ( 'Dim Date'[Date] )
+				MAX ( 'Date'[Date] )
 			VAR SelectedPeriodRunsPastData = PeriodEnd > LastSalesDate
 			RETURN
 				IF (
 					SelectedPeriodRunsPastData,
 					CALCULATE (
 						[Total Sales],
-						SAMEPERIODLASTYEAR ( 'Dim Date'[Date] ),
-						'Dim Date'[Month Day Number] <= CutoffMonthDay
+						SAMEPERIODLASTYEAR ( 'Date'[Date] ),
+						'Date'[Month Day Number] <= CutoffMonthDay
 					),
 					CALCULATE (
 						[Total Sales],
-						SAMEPERIODLASTYEAR ( 'Dim Date'[Date] )
+						SAMEPERIODLASTYEAR ( 'Date'[Date] )
 					)
 				)
 		formatString: "£"#,0.00
@@ -115,7 +115,7 @@ table _Measures
 	measure 'Online Sales' =
 			CALCULATE (
 				[Total Sales],
-				'Dim Customer'[Sales Channel] = "Online Sale"
+				'Customer'[Sales Channel] = "Online Sale"
 			)
 		formatString: "£"#,0.00
 		displayFolder: Sales\Channel
@@ -123,7 +123,7 @@ table _Measures
 	measure 'Retail Sales' =
 			CALCULATE (
 				[Total Sales],
-				'Dim Customer'[Sales Channel] = "Retail Sale"
+				'Customer'[Sales Channel] = "Retail Sale"
 			)
 		formatString: "£"#,0.00
 		displayFolder: Sales\Channel
@@ -136,7 +136,7 @@ table _Measures
 				[Online Sales],
 				CALCULATE (
 					[Total Sales],
-					REMOVEFILTERS ( 'Dim Customer'[Sales Channel] )
+					REMOVEFILTERS ( 'Customer'[Sales Channel] )
 				)
 			)
 		formatString: 0.0%;-0.0%;0.0%
@@ -147,7 +147,7 @@ table _Measures
 	measure 'Invoiced Sales' =
 			CALCULATE (
 				[Total Sales],
-				'Fact Sales'[Is Invoiced] = TRUE
+				'Sales'[Is Invoiced] = TRUE
 			)
 		formatString: "£"#,0.00
 		displayFolder: Sales\Order Fulfilment
@@ -158,7 +158,7 @@ table _Measures
 	measure 'Uninvoiced Sales' =
 			CALCULATE (
 				[Total Sales],
-				'Fact Sales'[Is Invoiced] = FALSE
+				'Sales'[Is Invoiced] = FALSE
 			)
 		formatString: "£"#,0.00
 		displayFolder: Sales\Order Fulfilment
@@ -166,7 +166,7 @@ table _Measures
 	measure 'Uninvoiced Orders' =
 			CALCULATE (
 				[Order Count],
-				'Fact Sales'[Is Invoiced] = FALSE
+				'Sales'[Is Invoiced] = FALSE
 			)
 		formatString: #,0
 		displayFolder: Sales\Order Fulfilment
@@ -176,7 +176,7 @@ table _Measures
 				[Uninvoiced Sales],
 				CALCULATE (
 					[Total Sales],
-					REMOVEFILTERS ( 'Fact Sales'[Is Invoiced] )
+					REMOVEFILTERS ( 'Sales'[Is Invoiced] )
 				)
 			)
 		formatString: 0.0%;-0.0%;0.0%
@@ -190,7 +190,7 @@ table _Measures
 			IF (
 				NOT ISBLANK ( [Total Sales] ),
 				RANKX (
-					ALLSELECTED ( 'Dim Customer'[Customer Name] ),
+					ALLSELECTED ( 'Customer'[Customer Name] ),
 					[Total Sales],
 					,
 					DESC,
@@ -205,7 +205,7 @@ table _Measures
 			IF (
 				NOT ISBLANK ( [Order Count] ),
 				RANKX (
-					ALLSELECTED ( 'Dim Customer'[Customer Name] ),
+					ALLSELECTED ( 'Customer'[Customer Name] ),
 					[Order Count],
 					,
 					DESC,

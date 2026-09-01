@@ -2,7 +2,7 @@
 /// Only 4 of the 14 appear in Sales (Each, Pair, Packet, Bag), and "Each"
 /// accounts for 97% of turnover - so this is a weak analytical dimension, but
 /// assignment task 5 asks for quantity and sales by package type.
-table 'Dim Package Type'
+table 'Package Type'
 
 	/// Source column: PackageTypeID.
 	column 'Package Type ID'
@@ -18,7 +18,7 @@ table 'Dim Package Type'
 		sourceColumn: Package Type
 		summarizeBy: none
 
-	partition 'Dim Package Type' = m
+	partition 'Package Type' = m
 		mode: import
 		queryGroup: Model\Dimensions
 		source =
