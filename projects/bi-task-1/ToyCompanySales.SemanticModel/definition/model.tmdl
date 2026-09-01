@@ -1,3 +1,6 @@
+/// Auto date/time is disabled below (annotation __PBI_TimeIntelligenceEnabled
+/// = 0) - the model has an explicit Date table marked as the date table, and
+/// the hidden auto date/time tables would be redundant and waste RAM.
 model Model
 	culture: en-GB
 	defaultPowerBIDataSourceVersion: powerBI_V3
@@ -7,8 +10,6 @@ model Model
 		legacyRedirects
 		returnErrorValuesAsNull
 
-	/// Auto date/time off - the model has an explicit Date marked as a date
-	/// table, and the hidden auto tables would be redundant and waste RAM.
 	annotation __PBI_TimeIntelligenceEnabled = 0
 
 	annotation PBI_ProTooling = ["DevMode"]

@@ -153,6 +153,39 @@ Key rules:
   whitespace before matching `///`, since these dividers are typically
   indented inside a table body, not at column 0.
 
+- **Not every object type supports `///` at all — check before you attach
+  one.** `///` compiles to the TOM `Description` property, and not every
+  TOM class has one. This is a semantic-deserialization error, not a
+  parse error, so it fails late — after every file has parsed
+  syntactically clean — with **no file or line number**, just
+  `Property 'description' is unknown and is not expected in the situation
+  it appears.` Confirmed against real Power BI Desktop (June 2026
+  release):
+  - `Relationship` has **no** `Description` property (confirmed via the
+    .NET API reference — its full property list is Annotations,
+    ChangedProperties, CrossFilteringBehavior, ExtendedProperties,
+    FromTable, IsActive, IsRemoved, JoinOnDateBehavior, ModifiedTime, Name,
+    ObjectType, Parent, RefreshedTime, RelyOnReferentialIntegrity,
+    SecurityFilteringBehavior, State, ToTable, Type — no description).
+    **Never put a `///` comment directly above a `relationship`
+    declaration.** If you want to explain a relationship's rationale
+    (e.g. why it's bidirectional, why a snowflake was flattened), put that
+    in the project's `NOTES.md`/`ANALYSIS.md`, or fold it into the
+    `Description` of one of the two tables it connects — not on the
+    relationship itself.
+  - `Annotation` also has **no** `Description` property (Name and Value
+    only). **Never put a `///` comment directly above an `annotation`
+    line.** If the annotation needs explaining (e.g. why
+    `__PBI_TimeIntelligenceEnabled` is set to `0`), put the `///` comment
+    on the enclosing `table`/`model` object instead.
+  - Confirmed to work: `table`, `column`, `measure`, `expression`
+    (NamedExpression), and `model` all support `Description` via `///`.
+  - When in doubt about a type not listed here (`partition`, `culture`,
+    `perspective`, `role`, `hierarchy`, `level`), check the corresponding
+    class on `learn.microsoft.com/en-us/dotnet/api/microsoft.analysisservices.tabular.<classname>`
+    for a `Description` property before attaching a `///` comment to it —
+    don't assume.
+
 ## Relationships
 
 Defined in `relationships.tmdl`, one block per relationship:
