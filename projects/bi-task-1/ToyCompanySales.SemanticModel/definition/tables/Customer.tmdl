@@ -57,7 +57,6 @@ table 'Customer'
 
 	partition 'Customer' = m
 		mode: import
-		queryGroup: Model\Dimensions
 		source =
 				let
 					Source = Excel.Workbook(File.Contents(SourceFolderPath & "Customer.xlsx"), null, true),

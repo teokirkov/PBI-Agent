@@ -16,8 +16,6 @@ model Model
 
 	annotation PBI_QueryOrder = ["SourceFolderPath","stgColor","stgSupplierCategory","stgStockItem","Sales","Customer","Product","Category","Bridge Product Category","Supplier","Package Type"]
 
-	annotation PBI_QueryGroups = [{"folder":"Staging","id":"1a2b3c4d-0001-4000-8000-000000000001","order":0},{"folder":"Model\\Facts","id":"1a2b3c4d-0002-4000-8000-000000000002","order":1},{"folder":"Model\\Dimensions","id":"1a2b3c4d-0003-4000-8000-000000000003","order":2}]
-
 ref table 'Sales'
 ref table 'Date'
 ref table 'Customer'

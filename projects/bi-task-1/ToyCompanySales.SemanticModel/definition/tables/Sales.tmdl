@@ -120,7 +120,6 @@ table 'Sales'
 
 	partition 'Sales' = m
 		mode: import
-		queryGroup: Model\Facts
 		source =
 				let
 					Source = Excel.Workbook(File.Contents(SourceFolderPath & "Sales.xlsx"), null, true),

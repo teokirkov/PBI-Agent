@@ -54,11 +54,17 @@ aggregation and relationships.
 
 Once a project has more than a handful of queries:
 
-- Group them into **folders** in Power Query (`Table.AddKey`-style grouping
-  isn't this — use the Query Editor's "Move to Group" equivalent, expressed
-  in PBIP as query group metadata) so the source list stays navigable, e.g.
-  a "Staging" group for raw imports and a "Model" group for the final
-  per-table queries.
+- **Don't hand-author `queryGroup:` / `PBI_QueryGroups`.** Confirmed
+  against real Power BI Desktop (June 2026 release): a hand-written
+  `queryGroup:` on a partition/expression, paired with a hand-written
+  `PBI_QueryGroups` annotation on `model.tmdl` defining the group
+  folders by GUID, fails to deserialize at all —
+  `Cannot resolve all the paths while de-serializing Database`, with every
+  `queryGroup` reference unresolvable. Query-group folders in the Power
+  Query navigator are purely a Desktop-UI convenience with no query-folding
+  or correctness impact, so it isn't worth hand-authoring: leave queries
+  ungrouped, and organize them into folders by hand in Desktop's Query
+  Editor after the project opens, if wanted.
 - Combine similar mechanical steps rather than one step per tiny action —
   e.g. rename every column that needs it in one `Table.RenameColumns` call,
   not five sequential single-column renames.

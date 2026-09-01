@@ -20,7 +20,6 @@ table 'Package Type'
 
 	partition 'Package Type' = m
 		mode: import
-		queryGroup: Model\Dimensions
 		source =
 				let
 					Source = Excel.Workbook(File.Contents(SourceFolderPath & "Warehouse Package Type.xlsx"), null, true),

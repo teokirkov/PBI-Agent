@@ -3,7 +3,6 @@
 /// C:\repos\PBI-Agent\docs\sample-data\bi-task-1\
 /// Nothing else in the model hardcodes a path.
 expression SourceFolderPath = "C:\repos\PBI-Agent\docs\sample-data\bi-task-1\" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
-	queryGroup: Staging
 
 	annotation PBI_ResultType = Text
 
@@ -28,7 +27,6 @@ expression stgColor =
 			Result = TypedColumns
 		in
 			Result
-	queryGroup: Staging
 
 /// Staging only - not loaded to the model. Supplier category lookup, merged
 /// into Supplier rather than snowflaked. Source: Purchasing Supplier
@@ -45,7 +43,6 @@ expression stgSupplierCategory =
 			Result = TypedColumns
 		in
 			Result
-	queryGroup: Staging
 
 /// Staging only - not loaded to the model. Raw stock item rows, consumed by
 /// three model queries: Product, Category and Bridge Product Category.
@@ -86,5 +83,4 @@ expression stgStockItem =
 			Result = TypedColumns
 		in
 			Result
-	queryGroup: Staging
 

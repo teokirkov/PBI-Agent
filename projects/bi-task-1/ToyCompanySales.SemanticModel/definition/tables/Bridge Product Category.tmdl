@@ -27,7 +27,6 @@ table 'Bridge Product Category'
 
 	partition 'Bridge Product Category' = m
 		mode: import
-		queryGroup: Model\Dimensions
 		source =
 				let
 					Source = stgStockItem,

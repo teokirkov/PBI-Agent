@@ -21,7 +21,6 @@ table 'Category'
 
 	partition 'Category' = m
 		mode: import
-		queryGroup: Model\Dimensions
 		source =
 				let
 					Source = stgStockItem,

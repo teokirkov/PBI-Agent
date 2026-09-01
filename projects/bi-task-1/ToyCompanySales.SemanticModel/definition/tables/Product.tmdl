@@ -59,7 +59,6 @@ table 'Product'
 
 	partition 'Product' = m
 		mode: import
-		queryGroup: Model\Dimensions
 		source =
 				let
 					Source = stgStockItem,
