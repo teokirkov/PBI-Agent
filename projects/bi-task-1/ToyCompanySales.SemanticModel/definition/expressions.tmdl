@@ -32,14 +32,17 @@ expression DatabricksSchema = "bi_tasks" meta [IsParameterQuery=true, Type="Text
 /// picks its own table out of the result in a single step.
 ///
 /// Deliberately one shared expression rather than the same three navigation
-/// lines repeated in seven queries: this Catalog -> Schema navigation shape is
-/// the construct in this model least verified against a real Power BI Desktop
-/// open (see NOTES.md 6.1). Keeping it in one place makes a correction on
-/// first open a one-line fix instead of a seven-file one.
+/// lines repeated in seven queries. Kind="Database" at the first level is
+/// not a typo for Kind="Catalog" - confirmed against Microsoft's own
+/// Databricks connector docs, the connector uses "Database" for what Unity
+/// Catalog calls a catalog. This failed with "The key didn't match any rows
+/// in the table" on every table before that fix (see NOTES.md 6.1 /
+/// decisions/0009 for the story) - now confirmed against two independent
+/// sources, not just the shape this repo guessed at.
 expression DatabricksBiTasks =
 		let
-			Source = Databricks.Catalogs(DatabricksHost, DatabricksHttpPath, [EnableAutomaticProxyDiscovery = null]),
-			NavigatedToCatalog = Source{[Name = DatabricksCatalog, Kind = "Catalog"]}[Data],
+			Source = Databricks.Catalogs(DatabricksHost, DatabricksHttpPath, [Catalog = null, Database = null, EnableAutomaticProxyDiscovery = null, Implementation = "2.0"]),
+			NavigatedToCatalog = Source{[Name = DatabricksCatalog, Kind = "Database"]}[Data],
 			NavigatedToSchema = NavigatedToCatalog{[Name = DatabricksSchema, Kind = "Schema"]}[Data],
 			Result = NavigatedToSchema
 		in

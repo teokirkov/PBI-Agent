@@ -125,8 +125,8 @@ partition 'Customer' = m
 	mode: import
 	source =
 		let
-			Source = Databricks.Catalogs(DatabricksHost, DatabricksHttpPath, [EnableAutomaticProxyDiscovery=null]),
-			dss_demos = Source{[Name="dss_demos",Kind="Catalog"]}[Data],
+			Source = Databricks.Catalogs(DatabricksHost, DatabricksHttpPath, [Catalog=null, Database=null, EnableAutomaticProxyDiscovery=null, Implementation="2.0"]),
+			dss_demos = Source{[Name="dss_demos",Kind="Database"]}[Data],
 			bi_tasks = dss_demos{[Name="bi_tasks",Kind="Schema"]}[Data],
 			customer = bi_tasks{[Name="customer",Kind="Table"]}[Data],
 			// normal typing/renaming/filtering steps from here, per
@@ -136,13 +136,22 @@ partition 'Customer' = m
 			Result
 ```
 
-**Honest confidence note, same spirit as the PBIP/TMDL caveats elsewhere in
-this repo**: this navigation shape (`Source{[Name=...,Kind=...]}[Data]`
-chained through Catalog → Schema → Table) is the standard pattern
-`Databricks.Catalogs` uses, but it has not been round-tripped through a real
-Power BI Desktop open the way the rest of this project's TMDL now has. Flag
-this specifically in `NOTES.md` when a project first uses it, and expect it
-may need a small correction on first real open — same as `queryGroup` did.
+**`Kind="Database"` at the first level is not a typo for `Kind="Catalog"`.**
+Confirmed against Microsoft's own Azure Databricks connector docs
+(`learn.microsoft.com/en-us/power-query/connectors/databricks-azure`) and a
+second independent example — both show this exact shape. The connector uses
+"Database" as its internal name for what Unity Catalog and the Databricks UI
+call a catalog. A first attempt at this got it wrong (`Kind="Catalog"`,
+which doesn't exist) and every table failed to refresh with
+`Expression.Error: The key didn't match any rows in the table.` — see
+`docs/decisions/0009-databricks-as-primary-data-source.md` for the full
+story. This is now a confirmed-correct pattern, not a guess — use it as
+written rather than re-deriving it.
+
+Also include the full options record shown above
+(`Catalog=null, Database=null, ..., Implementation="2.0"`) — that's the
+exact record Microsoft's documented example uses, not just the one option a
+partial reading of it originally kept.
 
 ## What NOT to do
 
