@@ -1,6 +1,6 @@
-/// One row per customer (663 rows). Source: Customer.xlsx, already
-/// denormalised - customer category and buying group are flattened in, so no
-/// further dimension tables are needed. 660 of the 663 have sales.
+/// One row per customer (663 rows). Source: dss_demos.bi_tasks.customer,
+/// already denormalised - customer category and buying group are flattened in,
+/// so no further dimension tables are needed. 660 of the 663 have sales.
 table 'Customer'
 
 	/// Source column: CustomerID.
@@ -59,9 +59,7 @@ table 'Customer'
 		mode: import
 		source =
 				let
-					Source = Excel.Workbook(File.Contents(SourceFolderPath & "Customer.xlsx"), null, true),
-					Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
-					PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars = true]),
+					Source = DatabricksBiTasks{[Name = "customer", Kind = "Table"]}[Data],
 					// Not loaded: seven constant or wholly empty columns
 					// (DeliveryMethodID, StandardDiscountPercentage,
 					// IsStatementSent, IsOnCreditHold, PaymentDays,
@@ -72,7 +70,7 @@ table 'Customer'
 					// DeliveryCityID / PostalCityID / DeliveryLocation, because
 					// no City lookup table was supplied so geography cannot be
 					// analysed.
-					SelectedColumns = Table.SelectColumns(PromotedHeaders, {
+					SelectedColumns = Table.SelectColumns(Source, {
 						"CustomerID",
 						"CustomerName",
 						"CustomerCategoryName",
@@ -95,7 +93,24 @@ table 'Customer'
 						{"CreditLimit", "Credit Limit"},
 						{"AccountOpenedDate", "Account Opened Date"}
 					}),
-					TypedColumns = Table.TransformColumnTypes(RenamedColumns, {
+					// Two columns the .xlsx extract delivered ready to type, which
+					// the warehouse delivers as text:
+					//   CreditLimit        currency text on the 261 rows that have
+					//                      one; the other 402 are null, which
+					//                      fnParseMoney passes through as null.
+					//   AccountOpenedDate  "1-Jan-13" - a different format from the
+					//                      long-date one on Sales, so it needs its
+					//                      own format string. The culture is stated
+					//                      so the parse does not depend on the
+					//                      machine's regional settings. The null
+					//                      guard is there so that one missing date
+					//                      could not fail the whole refresh - all
+					//                      663 are populated today.
+					ParsedColumns = Table.TransformColumns(RenamedColumns, {
+						{"Credit Limit", fnParseMoney, type nullable number},
+						{"Account Opened Date", each if _ = null or _ = "" then null else Date.FromText(_, [Format = "d-MMM-yy", Culture = "en-US"]), type nullable date}
+					}),
+					TypedColumns = Table.TransformColumnTypes(ParsedColumns, {
 						{"Customer ID", Int64.Type},
 						{"Customer Name", type text},
 						{"Customer Category", type text},

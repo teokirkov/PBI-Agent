@@ -60,3 +60,48 @@ exception) rather than fighting it.
 - Existing `docs/assignment/bi-task-1.pdf` was left in place as historical
   record — this decision changes the convention going forward, not
   retroactively.
+
+---
+
+## Status of the Power Query rewrite
+
+**Done** on 2026-09-01 (issue #1, branch `claude/issue-1-20260901-1512`),
+closing the "Not yet done as of this entry" consequence above. The seven
+partitions and the staging expressions now read from `dss_demos.bi_tasks.*`;
+`SourceFolderPath` is retired and `Excel.Workbook` / `File.Contents` /
+`SourceFolderPath` are now hard failures in
+`projects/bi-task-1/validate_tmdl.py`, so a half-applied migration cannot pass
+review.
+
+The consequence text above is deliberately left as written — it recorded what
+was true when the decision was taken, and this section records what changed
+since. Same convention as `0008`.
+
+**One thing this rewrite found that the decision could not have anticipated.**
+The warehouse copy is not a faithful transcription of the `.xlsx` files:
+
+- `sales` has 33 columns, not 35. The two redundant `UnitPrice` duplicates are
+  gone, which is an improvement — the old query had to keep Excel's
+  `Column1..Column35` names and pick columns *by position* to dodge the
+  duplicate header, and that workaround is now deleted.
+- But the copy that survived is the **currency-formatted text** one, not the
+  numeric one the model was reading. And the currency symbol is corrupted:
+  `£13.00` is stored as `?13.00`, confirmed with `HEX()` inside Databricks
+  (leading byte `3F`, a real ASCII question mark), so the `£` was lost to a
+  non-UTF8 encoding during the load into the warehouse. `TaxRate` and
+  `AccountOpenedDate` likewise arrive as text where the extract had a number
+  and a date.
+
+So "only the source step changes" turned out to be *nearly* true but not
+exactly: parsing that the file-based model got for free now has to be explicit.
+It is isolated in one `fnParseMoney` expression plus two inline parses, and
+every headline figure was recomputed in the warehouse and reconciles to the
+penny with the pre-migration numbers, so no reported number moved. The encoding
+itself should still be fixed at source — logged as `ANALYSIS.md` §5.6.
+
+**Still not verified:** the `Databricks.Catalogs` navigation shape this skill
+documents has never been round-tripped through Power BI Desktop. It is
+deliberately written once, in a shared `DatabricksBiTasks` expression, so a
+correction on first open is a one-line fix rather than a seven-file one.
+Flagged in `projects/bi-task-1/NOTES.md` §6.1 at the same confidence level
+`queryGroup` carried — and `queryGroup` did turn out to be wrong.

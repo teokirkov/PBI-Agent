@@ -1,7 +1,8 @@
-/// One row per order line (212,774 rows). Source: Sales.xlsx, which is a
-/// pre-joined flattening of order header, order line, invoice and customer
-/// transaction. Only the order-line-grain columns are loaded - see the
-/// partition comments and docs/decisions/0002.
+/// One row per order line (212,774 rows).
+/// Source: dss_demos.bi_tasks.sales, which is a pre-joined flattening of order
+/// header, order line, invoice and customer transaction. Only the
+/// order-line-grain columns are loaded - see the partition comments and
+/// docs/decisions/0002.
 table 'Sales'
 
 	/// Source column: OrderID. Degenerate dimension - 67,628 distinct values.
@@ -83,15 +84,17 @@ table 'Sales'
 		sourceColumn: Picked Quantity
 		summarizeBy: sum
 
-	/// Source column: the third "UnitPrice" column of Sales.xlsx (the numeric
-	/// one). Price per unit, ex-tax. Non-additive, so it never auto-aggregates.
+	/// Source column: UnitPrice, parsed from currency-formatted text via
+	/// fnParseMoney. Price per unit, ex-tax. Non-additive, so it never
+	/// auto-aggregates.
 	column 'Unit Price'
 		dataType: decimal
 		formatString: "£"#,0.00
 		sourceColumn: Unit Price
 		summarizeBy: none
 
-	/// Source column: TaxRate. 0.10 or 0.15. Non-additive.
+	/// Source column: TaxRate, parsed from percent-formatted text ("10.00%" /
+	/// "15.00%") back to 0.10 / 0.15. Non-additive.
 	column 'Tax Rate'
 		dataType: double
 		formatString: 0.00%;-0.00%;0.00%
@@ -122,55 +125,55 @@ table 'Sales'
 		mode: import
 		source =
 				let
-					Source = Excel.Workbook(File.Contents(SourceFolderPath & "Sales.xlsx"), null, true),
-					Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
-					// Sales.xlsx has three columns all literally headed
-					// "UnitPrice" (sheet columns 16, 17 and 18: currency-
-					// formatted text, always empty, and numeric). Promoting the
-					// header row would collide on that duplicate name, so keep
-					// Excel's Column1..Column35 names, pick by position, and
-					// rename explicitly in one step.
-					RemovedHeaderRow = Table.Skip(Sheet, 1),
+					Source = DatabricksBiTasks{[Name = "sales", Kind = "Table"]}[Data],
 					// Columns deliberately not loaded, none of which any KPI
 					// needs: AmountExcludingTax / TaxAmount / TransactionAmount
 					// (invoice grain repeated on every line - summing them here
 					// overstates sales 3.69x, see docs/decisions/0002);
-					// IsUndersupplyBackordered (constant "Yes"); UnitPrice as
-					// currency text and the always-empty second UnitPrice;
-					// InvoiceDate / TransactionDate / FinalizationDate (all
-					// derivable from each other); the five person IDs and
-					// ConfirmedReceivedBy (no lookup table supplied);
-					// PickingCompletedWhen and ConfirmedDeliveryTime (contain
-					// timestamps); BackorderOrderID, BillToCustomerID,
+					// IsUndersupplyBackordered (constant "Yes"); InvoiceDate /
+					// TransactionDate / FinalizationDate (all derivable from each
+					// other); the five person IDs and ConfirmedReceivedBy (no
+					// lookup table supplied); PickingCompletedWhen and
+					// ConfirmedDeliveryTime (contain timestamps);
+					// ExpectedDeliveryDate, BackorderOrderID, BillToCustomerID,
 					// CustomerPurchaseOrderNumber, TotalDryItems,
 					// CustomerTransactionID.
-					SelectedColumns = Table.SelectColumns(RemovedHeaderRow, {
-						"Column1",
-						"Column2",
-						"Column7",
-						"Column12",
-						"Column13",
-						"Column14",
-						"Column15",
-						"Column18",
-						"Column19",
-						"Column20",
-						"Column21",
-						"Column35"
+					//
+					// Columns are picked by name. The .xlsx extract could not do
+					// that: it carried three columns all literally headed
+					// "UnitPrice" (currency text, always empty, and numeric), so
+					// promoting its header row would have collided, and the query
+					// had to keep Excel's Column1..Column35 names and pick by
+					// position. The warehouse table has 33 uniquely named columns -
+					// the two redundant UnitPrice copies are not there at all - so
+					// the positional workaround is gone, and a column reordering
+					// upstream can no longer silently load the wrong data.
+					SelectedColumns = Table.SelectColumns(Source, {
+						"OrderID",
+						"CustomerID",
+						"OrderDate",
+						"OrderLineID",
+						"StockItemID",
+						"PackageTypeID",
+						"Quantity",
+						"UnitPrice",
+						"TaxRate",
+						"PickedQuantity",
+						"InvoiceID",
+						"SupplierID"
 					}),
 					RenamedColumns = Table.RenameColumns(SelectedColumns, {
-						{"Column1", "Order ID"},
-						{"Column2", "Customer ID"},
-						{"Column7", "Order Date"},
-						{"Column12", "Order Line ID"},
-						{"Column13", "Stock Item ID"},
-						{"Column14", "Package Type ID"},
-						{"Column15", "Quantity"},
-						{"Column18", "Unit Price"},
-						{"Column19", "Tax Rate"},
-						{"Column20", "Picked Quantity"},
-						{"Column21", "Invoice ID"},
-						{"Column35", "Supplier ID"}
+						{"OrderID", "Order ID"},
+						{"CustomerID", "Customer ID"},
+						{"OrderDate", "Order Date"},
+						{"OrderLineID", "Order Line ID"},
+						{"StockItemID", "Stock Item ID"},
+						{"PackageTypeID", "Package Type ID"},
+						{"UnitPrice", "Unit Price"},
+						{"TaxRate", "Tax Rate"},
+						{"PickedQuantity", "Picked Quantity"},
+						{"InvoiceID", "Invoice ID"},
+						{"SupplierID", "Supplier ID"}
 					}),
 					// OrderDate arrives as text in US long-date form
 					// ("Tuesday, January 1, 2013"). The culture is stated
@@ -179,7 +182,17 @@ table 'Sales'
 					ParsedOrderDate = Table.TransformColumns(RenamedColumns, {
 						{"Order Date", each Date.FromText(_, [Format = "dddd, MMMM d, yyyy", Culture = "en-US"]), type date}
 					}),
-					TypedColumns = Table.TransformColumnTypes(ParsedOrderDate, {
+					// Both of these arrive as formatted text from the warehouse
+					// where the .xlsx extract had a numeric copy to lean on:
+					//   UnitPrice  "?13.00"  ->  13    (see fnParseMoney)
+					//   TaxRate    "15.00%"  ->  0.15
+					// Only two distinct tax rates exist in the source, 10.00% and
+					// 15.00%, and both were verified to parse on all 212,774 rows.
+					ParsedAmounts = Table.TransformColumns(ParsedOrderDate, {
+						{"Unit Price", fnParseMoney, type nullable number},
+						{"Tax Rate", each Number.FromText(Text.Remove(_, {"%"}), "en-US") / 100, type number}
+					}),
+					TypedColumns = Table.TransformColumnTypes(ParsedAmounts, {
 						{"Order ID", Int64.Type},
 						{"Customer ID", Int64.Type},
 						{"Order Line ID", Int64.Type},

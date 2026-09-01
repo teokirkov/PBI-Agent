@@ -1,5 +1,5 @@
 /// One row per product stock-group tag (9 rows), derived from the distinct
-/// values across Warehouse Stock Item's CategoryName1/2/3.
+/// values across warehouse_stock_item's CategoryName1/2/3.
 ///
 /// IMPORTANT: a product carries 1 to 3 of these tags, so this dimension
 /// deliberately OVERLAPS. Each individual category's Total Sales is correct,

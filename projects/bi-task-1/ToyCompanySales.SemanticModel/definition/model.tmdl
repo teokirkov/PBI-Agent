@@ -14,7 +14,7 @@ model Model
 
 	annotation PBI_ProTooling = ["DevMode"]
 
-	annotation PBI_QueryOrder = ["SourceFolderPath","stgColor","stgSupplierCategory","stgStockItem","Sales","Customer","Product","Category","Bridge Product Category","Supplier","Package Type"]
+	annotation PBI_QueryOrder = ["DatabricksHost","DatabricksHttpPath","DatabricksCatalog","DatabricksSchema","DatabricksBiTasks","fnParseMoney","stgColor","stgSupplierCategory","stgStockItem","Sales","Customer","Product","Category","Bridge Product Category","Supplier","Package Type"]
 
 ref table 'Sales'
 ref table 'Date'
