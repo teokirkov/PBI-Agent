@@ -1,0 +1,10 @@
+# Power BI local/cache artifacts (should never be committed alongside PBIP/TMDL source)
+*.pbix
+*.pbit
+.pbi/
+*.tmp
+~$*
+
+# OS noise
+.DS_Store
+Thumbs.db
