@@ -133,7 +133,11 @@ deserves a human pass in Power BI Desktop — don't overstate confidence here.
    heading, the Desktop/Service/Release checklist items from the
    best-practices doc that are out of the agent's scope — see that doc's
    closing section), open questions, and post a summary comment on the
-   issue/PR describing what was built and what's pending.
+   issue/PR describing what was built and what's pending. Mention that the
+   `.pbip`/`NOTES.md`/`ANALYSIS.md` are also available as a downloadable
+   zip from this run's **Artifacts** section (bottom of the run's own page
+   — the same page the "View job run" link on this comment goes to), so
+   someone doesn't need to clone the repo just to grab the files.
 
 ## 4. Skills
 

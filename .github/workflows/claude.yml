@@ -27,3 +27,20 @@ jobs:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
           DATABRICKS_HTTP_PATH: ${{ vars.DATABRICKS_HTTP_PATH }}
+      - name: Package project deliverables as a downloadable artifact
+        if: always()
+        run: |
+          if [ -d "projects" ] && [ -n "$(find projects -mindepth 1 -maxdepth 1 -type d 2>/dev/null)" ]; then
+            zip -r pbi-projects.zip projects/
+            echo "Zipped projects/ -> pbi-projects.zip"
+          else
+            echo "No projects/ directory with content yet - nothing to package."
+          fi
+      - name: Upload project deliverables
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pbi-projects
+          path: pbi-projects.zip
+          if-no-files-found: ignore
+          retention-days: 30
