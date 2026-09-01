@@ -19,6 +19,7 @@ jobs:
         with:
           fetch-depth: 1
       - uses: anthropics/claude-code-action@v1
+        id: claude
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: |
@@ -27,6 +28,15 @@ jobs:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
           DATABRICKS_HTTP_PATH: ${{ vars.DATABRICKS_HTTP_PATH }}
+      - name: Check out the branch Claude actually committed to
+        # The action creates/pushes its branch via the GitHub API, not local
+        # git commands - the initial checkout's working tree does not
+        # reflect it automatically. branch_name is empty if no branch was
+        # created (e.g. a run that only answered without committing).
+        if: always() && steps.claude.outputs.branch_name != ''
+        run: |
+          git fetch origin "${{ steps.claude.outputs.branch_name }}"
+          git checkout "${{ steps.claude.outputs.branch_name }}"
       - name: Package project deliverables as a downloadable artifact
         if: always()
         run: |
