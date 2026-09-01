@@ -10,10 +10,13 @@ Power Query conventions from
 `docs/best-practices/power-bi-best-practices.md`; if the two ever disagree,
 the best-practices doc wins. One relevant team nuance up front: the team's
 default is to source from a data warehouse and keep Power Query
-transformation light, with an **explicit exception for small, file-sourced
-reports** — which is the normal case for this agent's projects. So the
-Power Query-heavy approach below isn't a shortcut around the team's
-preference, it's the documented exception applying.
+transformation light. That default is now the **normal case** for this
+agent's projects too, not the exception — see
+`../databricks-ingestion/SKILL.md` for the connector and profiling details.
+The file-sourced, Power Query-heavy approach below is still valid for the
+explicit "small report sourced from files" exception the best-practices doc
+carves out (`../sharepoint-data-ingestion/SKILL.md`), just no longer the
+default.
 
 ## Step naming
 

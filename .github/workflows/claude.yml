@@ -23,3 +23,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_args: |
             --allowedTools "WebSearch,WebFetch,Read,Write,Edit,Bash(git:*),Bash(python3:*),Bash(pip install:*)"
+        env:
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+          DATABRICKS_HTTP_PATH: ${{ vars.DATABRICKS_HTTP_PATH }}

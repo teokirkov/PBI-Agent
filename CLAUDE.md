@@ -24,8 +24,13 @@ in this repository. This means:
   1. `docs/decisions/` — every prior decision and its rationale
   2. `projects/<project>/NOTES.md` (if the project already exists) — where
      the previous run left off and what's still open
-  3. `docs/assignment/` and `docs/sample-data/` — the brief and the source
-     files for this project
+  3. **The triggering comment/issue thread itself** — the assignment/brief
+     and any ongoing feedback arrive here by default now (text, or an
+     attached file), not necessarily as a committed repo file. `docs/
+     assignment/` still exists as an optional archive if a brief was
+     committed there for a project, but treat the live thread as the
+     primary and most current source — a client giving feedback isn't going
+     to open a PR, they're going to comment.
   4. The relevant files under `.claude/skills/` (see §4)
 - **Before finishing any run**, update `projects/<project>/NOTES.md` with
   what you did and what's still outstanding, so the next run (which might be
@@ -96,10 +101,15 @@ deserves a human pass in Power BI Desktop — don't overstate confidence here.
 
 ## 3. Standard workflow for a new project
 
-1. **Discover** — read the assignment (`docs/assignment/`) and source files
-   (`docs/sample-data/`, or wherever this project's data lives — see
-   `.claude/skills/sharepoint-data-ingestion/SKILL.md` if it's meant to come
-   from SharePoint). Summarize what you're building before you build it.
+1. **Discover** — read the assignment from the triggering comment thread
+   (falling back to `docs/assignment/` if one was committed there for this
+   project), and find the source data. Default to
+   `.claude/skills/databricks-ingestion/SKILL.md` — most projects' data now
+   lives in the org's Databricks warehouse, not local files. Use
+   `docs/sample-data/` / `.claude/skills/sharepoint-data-ingestion/SKILL.md`
+   only for the explicit small-file-sourced-report exception, or if a
+   project's data was already committed there. Summarize what you're
+   building before you build it.
 2. **Profile** — for each source file, note columns, types, grain, obvious
    keys, data quality issues (blanks, duplicates, inconsistent formats).
    Flag anything that affects modeling choices.
@@ -135,8 +145,12 @@ independently of this file:
 - `dax-measures/` — DAX naming, formatting, and measure-writing conventions
 - `data-modeling-decisions/` — star schema heuristics and exactly which
   modeling situations must be escalated per §1
-- `sharepoint-data-ingestion/` — how source files get from SharePoint into
-  this repo (currently a manual/interim process — see that skill for status)
+- `databricks-ingestion/` — the default data source: how the agent profiles
+  Unity Catalog tables via the REST API at build time, and how the final
+  model's Power Query connects at Desktop open-time
+- `sharepoint-data-ingestion/` — the file-based fallback for the "small
+  report sourced from files" exception, or a project whose data was
+  committed to `docs/sample-data/` before Databricks access existed
 - `best-practices/` — the team's Power BI best-practices reference
   (populated, and **authoritative**: where any other skill file disagrees
   with it, the best-practices doc wins). Read this early — ideally as part
@@ -147,8 +161,8 @@ independently of this file:
 ```
 CLAUDE.md                  this file
 docs/setup/                how the GitHub Action / Codespace setup works
-docs/assignment/           the BI assignment brief(s) for a given project
-docs/sample-data/          source data files (interim manual drop location)
+docs/assignment/           optional archive of a brief, if one was committed (default is the comment thread)
+docs/sample-data/          source data files - fallback/exception path, not the default (see databricks-ingestion)
 docs/best-practices/       team Power BI best-practices reference (future)
 docs/decisions/            permanent log of every cross-roads decision made
 projects/<name>/           one folder per PBIP deliverable + NOTES.md/ANALYSIS.md
