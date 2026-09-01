@@ -3,7 +3,7 @@
 table _Measures
 
 	/// ---------------------------------------------------------------- Sales
-
+	///
 	/// Sales excluding tax, at order-line grain: SUM of Quantity * Unit Price.
 	/// This is the model's single definition of "sales" (docs/decisions/0002)
 	/// and every other sales measure derives from it. Includes the 2,809
@@ -43,7 +43,7 @@ table _Measures
 		displayFolder: Sales
 
 	/// ------------------------------------------------ Sales\Time Intelligence
-
+	///
 	/// The most recent order date anywhere in the fact table, ignoring all
 	/// filters (2016-02-29). Drives the like-for-like cut-off below, and is
 	/// worth putting on the report as an "as at" caption.
@@ -108,7 +108,7 @@ table _Measures
 		displayFolder: Sales\Time Intelligence
 
 	/// -------------------------------------------------------- Sales\Channel
-
+	///
 	/// Sales to customers flagged "Online Sale". Note the source flag sits on
 	/// the customer, not the order, so this is sales to online-type customers
 	/// rather than orders actually placed online (docs/decisions/0005).
@@ -143,7 +143,6 @@ table _Measures
 		displayFolder: Sales\Channel
 
 	/// ----------------------------------------------- Sales\Order Fulfilment
-
 	measure 'Invoiced Sales' =
 			CALCULATE (
 				[Total Sales],
@@ -183,7 +182,7 @@ table _Measures
 		displayFolder: Sales\Order Fulfilment
 
 	/// ------------------------------------------------------------- Ranking
-
+	///
 	/// Supports the "TOP customers by turnover" KPI. Ranks within whatever the
 	/// report has already filtered, so it stays correct under a slicer.
 	measure 'Customer Rank by Sales' =

@@ -139,6 +139,20 @@ Key rules:
   don't force it into a `///` block — put that context in the project's
   `NOTES.md`/`ANALYSIS.md` instead, or drop it.
 
+  **Watch specifically for decorative section-header dividers** (e.g.
+  `/// ---------------------------- Sales` before a group of measures that
+  share a `displayFolder`) — this is the shape that breaks in practice,
+  because it's naturally followed by a blank line for visual spacing before
+  the next `///` block or object. It's also **repetitive**: a `_Measures`
+  table grouped into several `displayFolder`s will have one of these before
+  *every* group, so a single miss compounds into several parse failures
+  found one Desktop-open at a time instead of caught all at once. When
+  checking your own output for this, grep for a divider-style pattern (e.g.
+  `/// -{3,}`) specifically, in addition to the generic
+  blank-line-after-`///` check — and make sure that check strips leading
+  whitespace before matching `///`, since these dividers are typically
+  indented inside a table body, not at column 0.
+
 ## Relationships
 
 Defined in `relationships.tmdl`, one block per relationship:
