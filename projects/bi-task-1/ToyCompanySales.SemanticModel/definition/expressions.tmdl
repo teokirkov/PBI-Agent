@@ -60,7 +60,8 @@ expression DatabricksBiTasks =
 /// "GBP13.00" or "13.00" - so fixing the encoding upstream cannot silently
 /// change any number in the model. The culture is stated explicitly so the
 /// decimal separator does not depend on the machine's regional settings.
-expression fnParseMoney = (input as nullable text) as nullable number =>
+expression fnParseMoney =
+		(input as nullable text) as nullable number =>
 		let
 			Trimmed = if input = null then null else Text.Trim(input),
 			DigitsOnly = if Trimmed = null or Trimmed = "" then null else Text.Select(Trimmed, {"0".."9", ".", "-"}),

@@ -103,6 +103,34 @@ Key rules:
 - Set `summarizeBy: none` on any numeric column that is a key or shouldn't
   auto-aggregate (e.g. an ID stored as a number) — leaving Power BI's default
   aggregation on ID-like numeric columns is a common, easy-to-miss mistake.
+- **A multi-line default-property value (`measure`/`expression`/`partition`
+  `source`) must have *nothing* after the `=` on the declaration line —**
+  the whole value starts fresh on the next line, or not at all. Confirmed
+  both against Microsoft's TMDL docs ("if multi-line, [an expression] must
+  be located in the line immediately following the property or object
+  declaration") and against real Desktop, which threw
+  `UnknownKeyword: The keyword 'let' is neither a property nor an object`
+  when a function's signature — `expression fn = (x as text) as number =>`
+  — sat on the declaration line before continuing to `let` on the next.
+  Right:
+  ```tmdl
+  expression fnParseMoney =
+  		(input as nullable text) as nullable number =>
+  		let
+  			...
+  		in
+  			Result
+  ```
+  Wrong (signature inline, body continues anyway):
+  ```tmdl
+  expression fnParseMoney = (input as nullable text) as nullable number =>
+  		let
+  			...
+  ```
+  A value that's short enough to be **entirely** on the declaration line
+  (`expression X = "literal" meta [...]`) is fine — the rule only bites
+  when the line has *some* content after `=` but the value isn't complete
+  there and continues onto further lines.
 - **TMDL has exactly one comment form at the document level: `///`, and it
   must attach with zero blank lines to the object it documents.** Confirmed
   against real Power BI Desktop (June 2026 release), across two separate
