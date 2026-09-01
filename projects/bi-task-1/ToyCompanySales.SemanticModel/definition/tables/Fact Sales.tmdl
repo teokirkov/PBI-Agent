@@ -1,0 +1,209 @@
+/// One row per order line (212,774 rows). Source: Sales.xlsx, which is a
+/// pre-joined flattening of order header, order line, invoice and customer
+/// transaction. Only the order-line-grain columns are loaded - see the
+/// partition comments and docs/decisions/0002.
+table 'Fact Sales'
+
+	/// Source column: OrderID. Degenerate dimension - 67,628 distinct values.
+	/// Drives the "unique order count" KPI via [Order Count].
+	column 'Order ID'
+		dataType: int64
+		formatString: 0
+		sourceColumn: Order ID
+		summarizeBy: none
+
+	/// Source column: OrderLineID. Primary key of the fact table - unique
+	/// across all 212,774 rows.
+	column 'Order Line ID'
+		dataType: int64
+		formatString: 0
+		isHidden
+		sourceColumn: Order Line ID
+		summarizeBy: none
+
+	/// Source column: CustomerID. Foreign key to Dim Customer.
+	column 'Customer ID'
+		dataType: int64
+		formatString: 0
+		isHidden
+		sourceColumn: Customer ID
+		summarizeBy: none
+
+	/// Source column: StockItemID. Foreign key to Dim Product.
+	column 'Stock Item ID'
+		dataType: int64
+		formatString: 0
+		isHidden
+		sourceColumn: Stock Item ID
+		summarizeBy: none
+
+	/// Source column: SupplierID. Foreign key to Dim Supplier. Fully derivable
+	/// from StockItemID (identical on all 212,774 rows) but kept as a direct
+	/// fact-to-dimension key to keep the star flat - see docs/decisions/0006.
+	column 'Supplier ID'
+		dataType: int64
+		formatString: 0
+		isHidden
+		sourceColumn: Supplier ID
+		summarizeBy: none
+
+	/// Source column: PackageTypeID. Foreign key to Dim Package Type. Equals
+	/// StockItem.UnitPackageID on all 212,774 rows (not OuterPackageID), so it
+	/// is the *unit* package. Kept direct - see docs/decisions/0006.
+	column 'Package Type ID'
+		dataType: int64
+		formatString: 0
+		isHidden
+		sourceColumn: Package Type ID
+		summarizeBy: none
+
+	/// Source column: OrderDate, parsed from text ("Tuesday, January 1, 2013").
+	/// The single analytical date of this model; relates to Dim Date.
+	column 'Order Date'
+		dataType: dateTime
+		formatString: dd/MM/yyyy
+		isHidden
+		sourceColumn: Order Date
+		summarizeBy: none
+
+	/// Source column: Quantity. Units ordered on this line.
+	column Quantity
+		dataType: int64
+		formatString: #,0
+		isHidden
+		sourceColumn: Quantity
+		summarizeBy: sum
+
+	/// Source column: PickedQuantity. Units actually picked; differs from
+	/// Quantity on 2,710 lines.
+	column 'Picked Quantity'
+		dataType: int64
+		formatString: #,0
+		isHidden
+		sourceColumn: Picked Quantity
+		summarizeBy: sum
+
+	/// Source column: the third "UnitPrice" column of Sales.xlsx (the numeric
+	/// one). Price per unit, ex-tax. Non-additive, so it never auto-aggregates.
+	column 'Unit Price'
+		dataType: decimal
+		formatString: "£"#,0.00
+		sourceColumn: Unit Price
+		summarizeBy: none
+
+	/// Source column: TaxRate. 0.10 or 0.15. Non-additive.
+	column 'Tax Rate'
+		dataType: double
+		formatString: 0.00%;-0.00%;0.00%
+		isHidden
+		sourceColumn: Tax Rate
+		summarizeBy: none
+
+	/// Quantity * Unit Price, computed in Power Query. This is the model's
+	/// definition of sales (ex-tax, order-line grain) per
+	/// docs/decisions/0002. Aggregate it only through [Total Sales].
+	column 'Line Amount'
+		dataType: decimal
+		formatString: "£"#,0.00
+		isHidden
+		sourceColumn: Line Amount
+		summarizeBy: sum
+
+	/// TRUE when the source row carried an InvoiceID. FALSE on 2,857 lines
+	/// belonging to 2,809 orders that were never invoiced. Those lines are
+	/// included in every sales figure - see docs/decisions/0003.
+	column 'Is Invoiced'
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		sourceColumn: Is Invoiced
+		summarizeBy: none
+
+	partition 'Fact Sales' = m
+		mode: import
+		queryGroup: Model\Facts
+		source =
+				let
+					Source = Excel.Workbook(File.Contents(SourceFolderPath & "Sales.xlsx"), null, true),
+					Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
+					// Sales.xlsx has three columns all literally headed
+					// "UnitPrice" (sheet columns 16, 17 and 18: currency-
+					// formatted text, always empty, and numeric). Promoting the
+					// header row would collide on that duplicate name, so keep
+					// Excel's Column1..Column35 names, pick by position, and
+					// rename explicitly in one step.
+					RemovedHeaderRow = Table.Skip(Sheet, 1),
+					// Columns deliberately not loaded, none of which any KPI
+					// needs: AmountExcludingTax / TaxAmount / TransactionAmount
+					// (invoice grain repeated on every line - summing them here
+					// overstates sales 3.69x, see docs/decisions/0002);
+					// IsUndersupplyBackordered (constant "Yes"); UnitPrice as
+					// currency text and the always-empty second UnitPrice;
+					// InvoiceDate / TransactionDate / FinalizationDate (all
+					// derivable from each other); the five person IDs and
+					// ConfirmedReceivedBy (no lookup table supplied);
+					// PickingCompletedWhen and ConfirmedDeliveryTime (contain
+					// timestamps); BackorderOrderID, BillToCustomerID,
+					// CustomerPurchaseOrderNumber, TotalDryItems,
+					// CustomerTransactionID.
+					SelectedColumns = Table.SelectColumns(RemovedHeaderRow, {
+						"Column1",
+						"Column2",
+						"Column7",
+						"Column12",
+						"Column13",
+						"Column14",
+						"Column15",
+						"Column18",
+						"Column19",
+						"Column20",
+						"Column21",
+						"Column35"
+					}),
+					RenamedColumns = Table.RenameColumns(SelectedColumns, {
+						{"Column1", "Order ID"},
+						{"Column2", "Customer ID"},
+						{"Column7", "Order Date"},
+						{"Column12", "Order Line ID"},
+						{"Column13", "Stock Item ID"},
+						{"Column14", "Package Type ID"},
+						{"Column15", "Quantity"},
+						{"Column18", "Unit Price"},
+						{"Column19", "Tax Rate"},
+						{"Column20", "Picked Quantity"},
+						{"Column21", "Invoice ID"},
+						{"Column35", "Supplier ID"}
+					}),
+					// OrderDate arrives as text in US long-date form
+					// ("Tuesday, January 1, 2013"). The culture is stated
+					// explicitly so the parse does not depend on the machine's
+					// regional settings.
+					ParsedOrderDate = Table.TransformColumns(RenamedColumns, {
+						{"Order Date", each Date.FromText(_, [Format = "dddd, MMMM d, yyyy", Culture = "en-US"]), type date}
+					}),
+					TypedColumns = Table.TransformColumnTypes(ParsedOrderDate, {
+						{"Order ID", Int64.Type},
+						{"Customer ID", Int64.Type},
+						{"Order Line ID", Int64.Type},
+						{"Stock Item ID", Int64.Type},
+						{"Package Type ID", Int64.Type},
+						{"Quantity", Int64.Type},
+						{"Unit Price", Currency.Type},
+						{"Tax Rate", type number},
+						{"Picked Quantity", Int64.Type},
+						{"Supplier ID", Int64.Type}
+					}),
+					// The model's sales definition. Computed here rather than as
+					// a DAX calculated column, per the team's Power Query-first
+					// rule for calculated columns.
+					AddedLineAmount = Table.AddColumn(TypedColumns, "Line Amount", each [Quantity] * [Unit Price], Currency.Type),
+					// Invoice ID itself is not loaded (64,819 distinct values on
+					// 212,774 rows costs RAM for no KPI); the boolean flag is
+					// all the uninvoiced-orders analysis needs.
+					AddedIsInvoiced = Table.AddColumn(AddedLineAmount, "Is Invoiced", each [Invoice ID] <> null, type logical),
+					RemovedInvoiceID = Table.RemoveColumns(AddedIsInvoiced, {"Invoice ID"}),
+					Result = RemovedInvoiceID
+				in
+					Result
+
+	annotation PBI_ResultType = Table
+

@@ -1,0 +1,103 @@
+/// One row per stock item (227 rows). Source: Warehouse Stock Item.xlsx with
+/// Warehouse Color.xlsx merged in rather than snowflaked. All 227 items sell.
+/// Category membership is NOT on this table - it is genuinely many-to-many and
+/// lives in Dim Category via Bridge Product Category (docs/decisions/0004).
+table 'Dim Product'
+
+	/// Source column: StockItemID.
+	column 'Stock Item ID'
+		dataType: int64
+		formatString: 0
+		isHidden
+		sourceColumn: Stock Item ID
+		summarizeBy: none
+
+	/// Source column: StockItemName. 227 distinct values.
+	column 'Product Name'
+		dataType: string
+		sourceColumn: Product Name
+		summarizeBy: none
+
+	/// Source column: Warehouse Color.ColorName, trimmed, joined on ColorID.
+	/// "(No colour)" where the stock item has no ColorID (99 of 227). Only 7 of
+	/// the 36 colours in the source are actually used.
+	column Colour
+		dataType: string
+		sourceColumn: Colour
+		summarizeBy: none
+
+	/// Source column: Size. "(Not specified)" where blank (64 of 227).
+	column Size
+		dataType: string
+		sourceColumn: Size
+		summarizeBy: none
+
+	/// The product's full set of stock-group tags as one label, e.g.
+	/// "Computing Novelties, Mugs, Novelty Items". 12 distinct values. Every
+	/// product has exactly one, so this slices sales additively and its
+	/// subtotals add up to the grand total - unlike Dim Category, which
+	/// deliberately overlaps. Use this when a breakdown has to reconcile.
+	column 'Category Group'
+		dataType: string
+		sourceColumn: Category Group
+		summarizeBy: none
+
+	/// Source column: UnitPrice. The stock item's list price - not what was
+	/// charged. Actual charged price is Fact Sales[Unit Price].
+	column 'List Price'
+		dataType: decimal
+		formatString: "£"#,0.00
+		sourceColumn: List Price
+		summarizeBy: none
+
+	/// Source column: RecommendedRetailPrice.
+	column 'Recommended Retail Price'
+		dataType: decimal
+		formatString: "£"#,0.00
+		sourceColumn: Recommended Retail Price
+		summarizeBy: none
+
+	partition 'Dim Product' = m
+		mode: import
+		queryGroup: Model\Dimensions
+		source =
+				let
+					Source = stgStockItem,
+					MergedColour = Table.NestedJoin(Source, {"ColorID"}, stgColor, {"ColorID"}, "ColourLookup", JoinKind.LeftOuter),
+					ExpandedColour = Table.ExpandTableColumn(MergedColour, "ColourLookup", {"ColorName"}, {"Colour"}),
+					// 99 of 227 stock items carry no ColorID and 64 no Size.
+					// Label both rather than leaving blanks in a slicer.
+					ReplacedBlanks = Table.TransformColumns(ExpandedColour, {
+						{"Colour", each if _ = null or _ = "" then "(No colour)" else _, type text},
+						{"Size", each if _ = null or _ = "" then "(Not specified)" else _, type text}
+					}),
+					// CategoryName1/2/3 are an alphabetically sorted,
+					// repetition-padded flattening of a product-to-stock-group
+					// many-to-many, not a hierarchy (all 227 rows are
+					// alphabetically non-decreasing across the three columns,
+					// and 94 repeat a single value three times). Collapsing them
+					// to their distinct set gives one additive label per
+					// product. The per-tag view lives in Dim Category.
+					AddedCategoryGroup = Table.AddColumn(ReplacedBlanks, "Category Group", each Text.Combine(List.Sort(List.Distinct({[CategoryName1], [CategoryName2], [CategoryName3]})), ", "), type text),
+					RemovedSourceColumns = Table.RemoveColumns(AddedCategoryGroup, {"ColorID", "CategoryName1", "CategoryName2", "CategoryName3"}),
+					RenamedColumns = Table.RenameColumns(RemovedSourceColumns, {
+						{"StockItemID", "Stock Item ID"},
+						{"StockItemName", "Product Name"},
+						{"UnitPrice", "List Price"},
+						{"RecommendedRetailPrice", "Recommended Retail Price"}
+					}),
+					TypedColumns = Table.TransformColumnTypes(RenamedColumns, {
+						{"Stock Item ID", Int64.Type},
+						{"Product Name", type text},
+						{"Colour", type text},
+						{"Size", type text},
+						{"Category Group", type text},
+						{"List Price", Currency.Type},
+						{"Recommended Retail Price", Currency.Type}
+					}),
+					Result = TypedColumns
+				in
+					Result
+
+	annotation PBI_ResultType = Table
+

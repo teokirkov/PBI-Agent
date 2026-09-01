@@ -1,0 +1,28 @@
+model Model
+	culture: en-GB
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	discourageImplicitMeasures
+	sourceQueryCulture: en-GB
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+	/// Auto date/time off - the model has an explicit Dim Date marked as a date
+	/// table, and the hidden auto tables would be redundant and waste RAM.
+	annotation __PBI_TimeIntelligenceEnabled = 0
+
+	annotation PBI_ProTooling = ["DevMode"]
+
+	annotation PBI_QueryOrder = ["SourceFolderPath","stgColor","stgSupplierCategory","stgStockItem","Fact Sales","Dim Customer","Dim Product","Dim Category","Bridge Product Category","Dim Supplier","Dim Package Type"]
+
+	annotation PBI_QueryGroups = [{"folder":"Staging","id":"1a2b3c4d-0001-4000-8000-000000000001","order":0},{"folder":"Model\\Facts","id":"1a2b3c4d-0002-4000-8000-000000000002","order":1},{"folder":"Model\\Dimensions","id":"1a2b3c4d-0003-4000-8000-000000000003","order":2}]
+
+ref table 'Fact Sales'
+ref table 'Dim Date'
+ref table 'Dim Customer'
+ref table 'Dim Product'
+ref table 'Dim Category'
+ref table 'Bridge Product Category'
+ref table 'Dim Supplier'
+ref table 'Dim Package Type'
+ref table _Measures

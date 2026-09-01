@@ -1,0 +1,56 @@
+/// Bridge table: one row per product-to-category membership (441 rows across
+/// 227 products, 1 to 3 tags each). Recovers the many-to-many that
+/// Warehouse Stock Item.xlsx flattened into CategoryName1/2/3.
+///
+/// The whole table is hidden - report authors should use Dim Category[Category]
+/// and Dim Product's attributes, never the bridge directly. Its relationship to
+/// Dim Product is bidirectional by necessity (that is what makes a category
+/// filter reach the fact); this is the one deliberate exception to the team's
+/// avoid-bidirectional rule and is recorded in docs/decisions/0004.
+table 'Bridge Product Category'
+	isHidden
+
+	/// Source column: StockItemID.
+	column 'Stock Item ID'
+		dataType: int64
+		formatString: 0
+		isHidden
+		sourceColumn: Stock Item ID
+		summarizeBy: none
+
+	/// One of the 9 stock-group tags.
+	column Category
+		dataType: string
+		isHidden
+		sourceColumn: Category
+		summarizeBy: none
+
+	partition 'Bridge Product Category' = m
+		mode: import
+		queryGroup: Model\Dimensions
+		source =
+				let
+					Source = stgStockItem,
+					SelectedColumns = Table.SelectColumns(Source, {"StockItemID", "CategoryName1", "CategoryName2", "CategoryName3"}),
+					UnpivotedCategories = Table.UnpivotOtherColumns(SelectedColumns, {"StockItemID"}, "Category Slot", "Category"),
+					// The slot number carries no meaning: the source sorted the
+					// tags alphabetically before flattening them, so slot 1 is
+					// not "the primary category".
+					RemovedSlotColumn = Table.RemoveColumns(UnpivotedCategories, {"Category Slot"}),
+					// Products with fewer than three tags had a tag repeated to
+					// fill the three columns, so the unpivot yields duplicates
+					// by construction. This dedupe is that padding being
+					// removed, not a data-quality guess: 227 x 3 = 681 unpivoted
+					// rows collapse to exactly 441 real memberships.
+					RemovedPaddingDuplicates = Table.Distinct(RemovedSlotColumn),
+					RenamedColumns = Table.RenameColumns(RemovedPaddingDuplicates, {{"StockItemID", "Stock Item ID"}}),
+					TypedColumns = Table.TransformColumnTypes(RenamedColumns, {
+						{"Stock Item ID", Int64.Type},
+						{"Category", type text}
+					}),
+					Result = TypedColumns
+				in
+					Result
+
+	annotation PBI_ResultType = Table
+

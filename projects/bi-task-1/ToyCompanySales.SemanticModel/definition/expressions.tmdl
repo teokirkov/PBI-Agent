@@ -1,0 +1,90 @@
+/// Folder that holds the seven BI Task 1 source .xlsx files, with a trailing
+/// backslash. Point this at your local checkout of the repo, e.g.
+/// C:\repos\PBI-Agent\docs\sample-data\bi-task-1\
+/// Nothing else in the model hardcodes a path.
+expression SourceFolderPath = "C:\repos\PBI-Agent\docs\sample-data\bi-task-1\" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	queryGroup: Staging
+
+	annotation PBI_ResultType = Text
+
+/// Staging only - not loaded to the model. Colour lookup, trimmed, merged into
+/// Dim Product. Source: Warehouse Color.xlsx.
+expression stgColor =
+		let
+			Source = Excel.Workbook(File.Contents(SourceFolderPath & "Warehouse Color.xlsx"), null, true),
+			Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
+			PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars = true]),
+			// ValidFrom / ValidTo / LastEditedBy are SCD bookkeeping and audit
+			// columns that nothing in the report uses, so they are not loaded.
+			SelectedColumns = Table.SelectColumns(PromotedHeaders, {"ColorID", "ColorName"}),
+			// Assignment task 2: 21 of the 36 ColorName values carry leading
+			// and/or trailing whitespace (e.g. "Azure      ", "      Black").
+			// Trimming does not create duplicates - all 36 names stay unique.
+			TrimmedColorName = Table.TransformColumns(SelectedColumns, {{"ColorName", Text.Trim, type text}}),
+			TypedColumns = Table.TransformColumnTypes(TrimmedColorName, {
+				{"ColorID", Int64.Type},
+				{"ColorName", type text}
+			}),
+			Result = TypedColumns
+		in
+			Result
+	queryGroup: Staging
+
+/// Staging only - not loaded to the model. Supplier category lookup, merged
+/// into Dim Supplier rather than snowflaked. Source: Purchasing Supplier
+/// Catalogue.xlsx.
+expression stgSupplierCategory =
+		let
+			Source = Excel.Workbook(File.Contents(SourceFolderPath & "Purchasing Supplier Catalogue.xlsx"), null, true),
+			Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
+			PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars = true]),
+			TypedColumns = Table.TransformColumnTypes(PromotedHeaders, {
+				{"SupplierCategoryID", Int64.Type},
+				{"SupplierCategoryName", type text}
+			}),
+			Result = TypedColumns
+		in
+			Result
+	queryGroup: Staging
+
+/// Staging only - not loaded to the model. Raw stock item rows, consumed by
+/// three model queries: Dim Product, Dim Category and Bridge Product Category.
+/// Source: Warehouse Stock Item.xlsx.
+expression stgStockItem =
+		let
+			Source = Excel.Workbook(File.Contents(SourceFolderPath & "Warehouse Stock Item.xlsx"), null, true),
+			Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
+			PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars = true]),
+			// Only the columns the report needs. Dropped: Brand (18/227
+			// populated), Barcode (8/227), InternalComments (empty),
+			// MarketingComments, CustomFields and Tags (JSON blobs),
+			// SearchDetails (duplicate of StockItemName), IsChillerStock
+			// (unused), OuterPackageID, TaxRate (already on the fact),
+			// TypicalWeightPerUnit, LeadTimeDays, QuantityPerOuter.
+			SelectedColumns = Table.SelectColumns(PromotedHeaders, {
+				"StockItemID",
+				"StockItemName",
+				"ColorID",
+				"Size",
+				"UnitPrice",
+				"RecommendedRetailPrice",
+				"CategoryName1",
+				"CategoryName2",
+				"CategoryName3"
+			}),
+			TypedColumns = Table.TransformColumnTypes(SelectedColumns, {
+				{"StockItemID", Int64.Type},
+				{"StockItemName", type text},
+				{"ColorID", Int64.Type},
+				{"Size", type text},
+				{"UnitPrice", Currency.Type},
+				{"RecommendedRetailPrice", Currency.Type},
+				{"CategoryName1", type text},
+				{"CategoryName2", type text},
+				{"CategoryName3", type text}
+			}),
+			Result = TypedColumns
+		in
+			Result
+	queryGroup: Staging
+

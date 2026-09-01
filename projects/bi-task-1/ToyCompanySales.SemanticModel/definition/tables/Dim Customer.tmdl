@@ -1,0 +1,113 @@
+/// One row per customer (663 rows). Source: Customer.xlsx, already
+/// denormalised - customer category and buying group are flattened in, so no
+/// further dimension tables are needed. 660 of the 663 have sales.
+table 'Dim Customer'
+
+	/// Source column: CustomerID.
+	column 'Customer ID'
+		dataType: int64
+		formatString: 0
+		isHidden
+		sourceColumn: Customer ID
+		summarizeBy: none
+
+	/// Source column: CustomerName. 663 distinct values.
+	column 'Customer Name'
+		dataType: string
+		sourceColumn: Customer Name
+		summarizeBy: none
+
+	/// Source column: CustomerCategoryName. Novelty Shop, Supermarket,
+	/// Computer Store, Gift Store, Corporate.
+	column 'Customer Category'
+		dataType: string
+		sourceColumn: Customer Category
+		summarizeBy: none
+
+	/// Source column: OnlineSalesConditional. "Online Sale" or "Retail Sale".
+	/// This is a *customer* attribute, not a per-order flag - it is perfectly
+	/// determined by Buying Group. So "online sales %" means sales to
+	/// online-type customers. See docs/decisions/0005.
+	column 'Sales Channel'
+		dataType: string
+		sourceColumn: Sales Channel
+		summarizeBy: none
+
+	/// Source column: BuyingGroupName. Tailspin Toys, Wingtip Toys, or
+	/// "(No buying group)" where the source was blank (261 of 663 customers -
+	/// exactly the Retail Sale ones).
+	column 'Buying Group'
+		dataType: string
+		sourceColumn: Buying Group
+		summarizeBy: none
+
+	/// Source column: CreditLimit. Blank on 402 of 663 customers.
+	column 'Credit Limit'
+		dataType: decimal
+		formatString: "£"#,0.00
+		sourceColumn: Credit Limit
+		summarizeBy: none
+
+	/// Source column: AccountOpenedDate.
+	column 'Account Opened Date'
+		dataType: dateTime
+		formatString: dd/MM/yyyy
+		sourceColumn: Account Opened Date
+		summarizeBy: none
+
+	partition 'Dim Customer' = m
+		mode: import
+		queryGroup: Model\Dimensions
+		source =
+				let
+					Source = Excel.Workbook(File.Contents(SourceFolderPath & "Customer.xlsx"), null, true),
+					Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
+					PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars = true]),
+					// Not loaded: seven constant or wholly empty columns
+					// (DeliveryMethodID, StandardDiscountPercentage,
+					// IsStatementSent, IsOnCreditHold, PaymentDays,
+					// DeliveryRun, RunPosition); the special-deal block
+					// (SpecialDealID, DealDescription, StartDate, EndDate,
+					// DiscountPercentage - all dated 2016 Q2, after the data
+					// window); addresses, phone/fax and WebsiteURL; and
+					// DeliveryCityID / PostalCityID / DeliveryLocation, because
+					// no City lookup table was supplied so geography cannot be
+					// analysed.
+					SelectedColumns = Table.SelectColumns(PromotedHeaders, {
+						"CustomerID",
+						"CustomerName",
+						"CustomerCategoryName",
+						"OnlineSalesConditional",
+						"BuyingGroupName",
+						"CreditLimit",
+						"AccountOpenedDate"
+					}),
+					// Retail Sale customers have no buying group; label it
+					// rather than leaving a blank that reads as missing data.
+					ReplacedBlankBuyingGroup = Table.TransformColumns(SelectedColumns, {
+						{"BuyingGroupName", each if _ = null or _ = "" then "(No buying group)" else _, type text}
+					}),
+					RenamedColumns = Table.RenameColumns(ReplacedBlankBuyingGroup, {
+						{"CustomerID", "Customer ID"},
+						{"CustomerName", "Customer Name"},
+						{"CustomerCategoryName", "Customer Category"},
+						{"OnlineSalesConditional", "Sales Channel"},
+						{"BuyingGroupName", "Buying Group"},
+						{"CreditLimit", "Credit Limit"},
+						{"AccountOpenedDate", "Account Opened Date"}
+					}),
+					TypedColumns = Table.TransformColumnTypes(RenamedColumns, {
+						{"Customer ID", Int64.Type},
+						{"Customer Name", type text},
+						{"Customer Category", type text},
+						{"Sales Channel", type text},
+						{"Buying Group", type text},
+						{"Credit Limit", Currency.Type},
+						{"Account Opened Date", type date}
+					}),
+					Result = TypedColumns
+				in
+					Result
+
+	annotation PBI_ResultType = Table
+

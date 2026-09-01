@@ -1,0 +1,91 @@
+/// One row per supplier (13 rows). Source: Purchasing Supplier.xlsx with
+/// Purchasing Supplier Catalogue.xlsx merged in rather than snowflaked. Only 7
+/// of the 13 suppliers appear in Sales, so supplier visuals will show six
+/// zero-value members unless the visual filters to non-blank.
+table 'Dim Supplier'
+
+	/// Source column: SupplierID.
+	column 'Supplier ID'
+		dataType: int64
+		formatString: 0
+		isHidden
+		sourceColumn: Supplier ID
+		summarizeBy: none
+
+	/// Source column: SupplierName. 13 distinct values.
+	column 'Supplier Name'
+		dataType: string
+		sourceColumn: Supplier Name
+		summarizeBy: none
+
+	/// Source column: Purchasing Supplier Catalogue.SupplierCategoryName,
+	/// joined on SupplierCategoryID. 8 of the 9 catalogue categories are used.
+	column 'Supplier Category'
+		dataType: string
+		sourceColumn: Supplier Category
+		summarizeBy: none
+
+	/// Source column: SupplierReference, with the stray underscore removed as
+	/// assignment task 2 requires.
+	column 'Supplier Reference'
+		dataType: string
+		sourceColumn: Supplier Reference
+		summarizeBy: none
+
+	/// Source column: PaymentDays.
+	column 'Payment Days'
+		dataType: int64
+		formatString: 0
+		sourceColumn: Payment Days
+		summarizeBy: none
+
+	partition 'Dim Supplier' = m
+		mode: import
+		queryGroup: Model\Dimensions
+		source =
+				let
+					Source = Excel.Workbook(File.Contents(SourceFolderPath & "Purchasing Supplier.xlsx"), null, true),
+					Sheet = Source{[Item = "Sheet1", Kind = "Sheet"]}[Data],
+					PromotedHeaders = Table.PromoteHeaders(Sheet, [PromoteAllScalars = true]),
+					// Not loaded: the five bank-account columns (not needed by
+					// any KPI and mildly sensitive), contact person IDs,
+					// addresses, city IDs, phone/fax, WebsiteURL,
+					// DeliveryMethodID and InternalComments.
+					SelectedColumns = Table.SelectColumns(PromotedHeaders, {
+						"SupplierID",
+						"SupplierName",
+						"SupplierCategoryID",
+						"SupplierReference",
+						"PaymentDays"
+					}),
+					// Assignment task 2: strip the underscore from
+					// SupplierReference. It is NOT always leading - 8 of the 13
+					// values have it in front ("_AA20384") and 5 have it
+					// trailing ("082420938_") - so remove every "_" rather than
+					// trimming one end.
+					CleanedSupplierReference = Table.TransformColumns(SelectedColumns, {
+						{"SupplierReference", each Text.Remove(_, {"_"}), type text}
+					}),
+					MergedSupplierCategory = Table.NestedJoin(CleanedSupplierReference, {"SupplierCategoryID"}, stgSupplierCategory, {"SupplierCategoryID"}, "CategoryLookup", JoinKind.LeftOuter),
+					ExpandedSupplierCategory = Table.ExpandTableColumn(MergedSupplierCategory, "CategoryLookup", {"SupplierCategoryName"}, {"SupplierCategoryName"}),
+					RemovedJoinKey = Table.RemoveColumns(ExpandedSupplierCategory, {"SupplierCategoryID"}),
+					RenamedColumns = Table.RenameColumns(RemovedJoinKey, {
+						{"SupplierID", "Supplier ID"},
+						{"SupplierName", "Supplier Name"},
+						{"SupplierCategoryName", "Supplier Category"},
+						{"SupplierReference", "Supplier Reference"},
+						{"PaymentDays", "Payment Days"}
+					}),
+					TypedColumns = Table.TransformColumnTypes(RenamedColumns, {
+						{"Supplier ID", Int64.Type},
+						{"Supplier Name", type text},
+						{"Supplier Category", type text},
+						{"Supplier Reference", type text},
+						{"Payment Days", Int64.Type}
+					}),
+					Result = TypedColumns
+				in
+					Result
+
+	annotation PBI_ResultType = Table
+

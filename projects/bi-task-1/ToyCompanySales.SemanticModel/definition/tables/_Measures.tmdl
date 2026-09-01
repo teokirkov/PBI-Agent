@@ -1,0 +1,228 @@
+/// Home for every explicit measure in the model. Holds no data - the single
+/// Value column exists only so the table can be created, and is hidden.
+table _Measures
+
+	/// ---------------------------------------------------------------- Sales
+
+	/// Sales excluding tax, at order-line grain: SUM of Quantity * Unit Price.
+	/// This is the model's single definition of "sales" (docs/decisions/0002)
+	/// and every other sales measure derives from it. Includes the 2,809
+	/// never-invoiced orders (docs/decisions/0003).
+	measure 'Total Sales' = SUM ( 'Fact Sales'[Line Amount] )
+		formatString: "£"#,0.00
+		displayFolder: Sales
+
+	/// Units ordered. Note this is ordered, not picked - see [Total Quantity
+	/// Picked] for what actually left the warehouse.
+	measure 'Total Quantity' = SUM ( 'Fact Sales'[Quantity] )
+		formatString: #,0
+		displayFolder: Sales
+
+	measure 'Total Quantity Picked' = SUM ( 'Fact Sales'[Picked Quantity] )
+		formatString: #,0
+		displayFolder: Sales
+
+	/// The assignment's "unique order count" KPI. Distinct orders, not order
+	/// lines - one order averages 3.15 lines.
+	measure 'Order Count' = DISTINCTCOUNT ( 'Fact Sales'[Order ID] )
+		formatString: #,0
+		displayFolder: Sales
+
+	measure 'Order Line Count' = COUNTROWS ( 'Fact Sales' )
+		formatString: #,0
+		displayFolder: Sales
+
+	measure 'Customer Count' = DISTINCTCOUNT ( 'Fact Sales'[Customer ID] )
+		formatString: #,0
+		displayFolder: Sales
+
+	/// The assignment's "average order amount in GBP" KPI. Sales per distinct
+	/// order, so it is order-weighted rather than a mean of line amounts.
+	measure 'Average Order Amount' = DIVIDE ( [Total Sales], [Order Count] )
+		formatString: "£"#,0.00
+		displayFolder: Sales
+
+	/// ------------------------------------------------ Sales\Time Intelligence
+
+	/// The most recent order date anywhere in the fact table, ignoring all
+	/// filters (2016-02-29). Drives the like-for-like cut-off below, and is
+	/// worth putting on the report as an "as at" caption.
+	measure 'Last Sales Date' =
+			CALCULATE (
+				MAX ( 'Fact Sales'[Order Date] ),
+				REMOVEFILTERS ()
+			)
+		formatString: dd/MM/yyyy
+		displayFolder: Sales\Time Intelligence
+
+	measure 'Sales YTD' = TOTALYTD ( [Total Sales], 'Dim Date'[Date] )
+		formatString: "£"#,0.00
+		displayFolder: Sales\Time Intelligence
+
+	measure 'Sales MTD' = TOTALMTD ( [Total Sales], 'Dim Date'[Date] )
+		formatString: "£"#,0.00
+		displayFolder: Sales\Time Intelligence
+
+	/// Prior-year sales, cut at the same calendar point the current period's
+	/// data stops at (docs/decisions/0007). The data ends 29 February 2016, so
+	/// comparing full-year 2016 against full-year 2015 would read -84% and mean
+	/// nothing. When the selected period runs past the last date with data,
+	/// this trims last year to the same month-and-day; otherwise it is a plain
+	/// same-period-last-year. So 2015 vs 2014 still compares two whole years,
+	/// while 2016 vs 2015 compares January-February against January-February.
+	measure 'Sales LY (Like-for-Like)' =
+			VAR LastSalesDate = [Last Sales Date]
+			VAR CutoffMonthDay =
+				MONTH ( LastSalesDate ) * 100
+					+ DAY ( LastSalesDate )
+			VAR PeriodEnd =
+				MAX ( 'Dim Date'[Date] )
+			VAR SelectedPeriodRunsPastData = PeriodEnd > LastSalesDate
+			RETURN
+				IF (
+					SelectedPeriodRunsPastData,
+					CALCULATE (
+						[Total Sales],
+						SAMEPERIODLASTYEAR ( 'Dim Date'[Date] ),
+						'Dim Date'[Month Day Number] <= CutoffMonthDay
+					),
+					CALCULATE (
+						[Total Sales],
+						SAMEPERIODLASTYEAR ( 'Dim Date'[Date] )
+					)
+				)
+		formatString: "£"#,0.00
+		displayFolder: Sales\Time Intelligence
+
+	measure 'Sales YoY Change' = [Total Sales] - [Sales LY (Like-for-Like)]
+		formatString: "£"#,0.00
+		displayFolder: Sales\Time Intelligence
+
+	/// The assignment's "YOY sales" KPI, on a like-for-like basis.
+	measure 'Sales YoY %' =
+			DIVIDE (
+				[Sales YoY Change],
+				[Sales LY (Like-for-Like)]
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Sales\Time Intelligence
+
+	/// -------------------------------------------------------- Sales\Channel
+
+	/// Sales to customers flagged "Online Sale". Note the source flag sits on
+	/// the customer, not the order, so this is sales to online-type customers
+	/// rather than orders actually placed online (docs/decisions/0005).
+	measure 'Online Sales' =
+			CALCULATE (
+				[Total Sales],
+				'Dim Customer'[Sales Channel] = "Online Sale"
+			)
+		formatString: "£"#,0.00
+		displayFolder: Sales\Channel
+
+	measure 'Retail Sales' =
+			CALCULATE (
+				[Total Sales],
+				'Dim Customer'[Sales Channel] = "Retail Sale"
+			)
+		formatString: "£"#,0.00
+		displayFolder: Sales\Channel
+
+	/// The assignment's "online sales as a % of overall sales" KPI. The
+	/// denominator drops any Sales Channel filter, so the measure still reads
+	/// as a share of the whole when a visual is already split by channel.
+	measure 'Online Sales %' =
+			DIVIDE (
+				[Online Sales],
+				CALCULATE (
+					[Total Sales],
+					REMOVEFILTERS ( 'Dim Customer'[Sales Channel] )
+				)
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Sales\Channel
+
+	/// ----------------------------------------------- Sales\Order Fulfilment
+
+	measure 'Invoiced Sales' =
+			CALCULATE (
+				[Total Sales],
+				'Fact Sales'[Is Invoiced] = TRUE
+			)
+		formatString: "£"#,0.00
+		displayFolder: Sales\Order Fulfilment
+
+	/// Sales on orders that were never invoiced. Included in [Total Sales] by
+	/// decision (docs/decisions/0003); this measure and the two below exist so
+	/// the report can show how much that decision is worth.
+	measure 'Uninvoiced Sales' =
+			CALCULATE (
+				[Total Sales],
+				'Fact Sales'[Is Invoiced] = FALSE
+			)
+		formatString: "£"#,0.00
+		displayFolder: Sales\Order Fulfilment
+
+	measure 'Uninvoiced Orders' =
+			CALCULATE (
+				[Order Count],
+				'Fact Sales'[Is Invoiced] = FALSE
+			)
+		formatString: #,0
+		displayFolder: Sales\Order Fulfilment
+
+	measure 'Uninvoiced Sales %' =
+			DIVIDE (
+				[Uninvoiced Sales],
+				CALCULATE (
+					[Total Sales],
+					REMOVEFILTERS ( 'Fact Sales'[Is Invoiced] )
+				)
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Sales\Order Fulfilment
+
+	/// ------------------------------------------------------------- Ranking
+
+	/// Supports the "TOP customers by turnover" KPI. Ranks within whatever the
+	/// report has already filtered, so it stays correct under a slicer.
+	measure 'Customer Rank by Sales' =
+			IF (
+				NOT ISBLANK ( [Total Sales] ),
+				RANKX (
+					ALLSELECTED ( 'Dim Customer'[Customer Name] ),
+					[Total Sales],
+					,
+					DESC,
+					DENSE
+				)
+			)
+		formatString: #,0
+		displayFolder: Ranking
+
+	/// Supports the "TOP customers by number of orders" KPI.
+	measure 'Customer Rank by Orders' =
+			IF (
+				NOT ISBLANK ( [Order Count] ),
+				RANKX (
+					ALLSELECTED ( 'Dim Customer'[Customer Name] ),
+					[Order Count],
+					,
+					DESC,
+					DENSE
+				)
+			)
+		formatString: #,0
+		displayFolder: Ranking
+
+	column Value
+		dataType: string
+		isHidden
+		isNameInferred
+		sourceColumn: [Value]
+		summarizeBy: none
+
+	partition _Measures = calculated
+		mode: import
+		source = {""}
+

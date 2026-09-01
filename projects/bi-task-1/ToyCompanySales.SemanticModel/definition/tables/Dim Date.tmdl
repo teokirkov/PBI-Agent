@@ -1,0 +1,157 @@
+/// One row per calendar day, 2013-01-01 to 2016-12-31 (1,461 rows). Built as a
+/// DAX calculated table because assignment task 3 requires it. A generated
+/// contiguous calendar matters here: the company never trades on a Sunday, so
+/// 165 days are missing from the order dates and a distinct-date list would
+/// silently break time intelligence.
+table 'Dim Date'
+	dataCategory: Time
+
+	column Date
+		dataType: dateTime
+		formatString: dd/MM/yyyy
+		isNameInferred
+		isKey
+		sourceColumn: [Date]
+		summarizeBy: none
+
+	column Year
+		dataType: int64
+		formatString: 0
+		isNameInferred
+		sourceColumn: [Year]
+		summarizeBy: none
+
+	/// "Q1".."Q4". Sorted by Quarter Number.
+	column Quarter
+		dataType: string
+		isNameInferred
+		sortByColumn: 'Quarter Number'
+		sourceColumn: [Quarter]
+		summarizeBy: none
+
+	column 'Quarter Number'
+		dataType: int64
+		formatString: 0
+		isHidden
+		isNameInferred
+		sourceColumn: [Quarter Number]
+		summarizeBy: none
+
+	/// Full month name, rendered with an explicit en-GB locale so it does not
+	/// change with the machine's regional settings. Sorted by Month Number.
+	column Month
+		dataType: string
+		isNameInferred
+		sortByColumn: 'Month Number'
+		sourceColumn: [Month]
+		summarizeBy: none
+
+	/// Three-letter month name, for narrow axis labels.
+	column 'Month Short'
+		dataType: string
+		isNameInferred
+		sortByColumn: 'Month Number'
+		sourceColumn: [Month Short]
+		summarizeBy: none
+
+	column 'Month Number'
+		dataType: int64
+		formatString: 0
+		isHidden
+		isNameInferred
+		sourceColumn: [Month Number]
+		summarizeBy: none
+
+	/// "2013-01" style label for a continuous month axis across years.
+	column 'Year Month'
+		dataType: string
+		isNameInferred
+		sortByColumn: 'Year Month Number'
+		sourceColumn: [Year Month]
+		summarizeBy: none
+
+	column 'Year Month Number'
+		dataType: int64
+		formatString: 0
+		isHidden
+		isNameInferred
+		sourceColumn: [Year Month Number]
+		summarizeBy: none
+
+	column 'Day Of Month'
+		dataType: int64
+		formatString: 0
+		isNameInferred
+		sourceColumn: [Day Of Month]
+		summarizeBy: none
+
+	/// MONTH * 100 + DAY, e.g. 229 for 29 February. Used by
+	/// [Sales LY (Like-for-Like)] to cut the prior year at the same calendar
+	/// point the current year's data stops at. Comparing month-and-day rather
+	/// than day-of-year keeps the 29 February 2016 cut-off correct against
+	/// non-leap 2015.
+	column 'Month Day Number'
+		dataType: int64
+		formatString: 0
+		isHidden
+		isNameInferred
+		sourceColumn: [Month Day Number]
+		summarizeBy: none
+
+	/// Full weekday name (en-GB). Sorted by Day Of Week Number.
+	column 'Day Name'
+		dataType: string
+		isNameInferred
+		sortByColumn: 'Day Of Week Number'
+		sourceColumn: [Day Name]
+		summarizeBy: none
+
+	/// 1 = Monday .. 7 = Sunday.
+	column 'Day Of Week Number'
+		dataType: int64
+		formatString: 0
+		isHidden
+		isNameInferred
+		sourceColumn: [Day Of Week Number]
+		summarizeBy: none
+
+	/// FALSE on Sundays. The company took no orders on any of the 165 Sundays
+	/// in the data window, so this is the trading calendar, not a guess.
+	column 'Is Trading Day'
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		isNameInferred
+		sourceColumn: [Is Trading Day]
+		summarizeBy: none
+
+	partition 'Dim Date' = calculated
+		mode: import
+		source =
+				VAR MinOrderDate =
+					MIN ( 'Fact Sales'[Order Date] )
+				VAR MaxOrderDate =
+					MAX ( 'Fact Sales'[Order Date] )
+				VAR FirstDay =
+					DATE ( YEAR ( MinOrderDate ), 1, 1 )
+				VAR LastDay =
+					DATE ( YEAR ( MaxOrderDate ), 12, 31 )
+				RETURN
+					ADDCOLUMNS (
+						CALENDAR ( FirstDay, LastDay ),
+						"Year", YEAR ( [Date] ),
+						"Quarter Number", QUARTER ( [Date] ),
+						"Quarter", "Q" & QUARTER ( [Date] ),
+						"Month Number", MONTH ( [Date] ),
+						"Month", FORMAT ( [Date], "mmmm", "en-GB" ),
+						"Month Short", FORMAT ( [Date], "mmm", "en-GB" ),
+						"Year Month", FORMAT ( [Date], "yyyy-mm", "en-GB" ),
+						"Year Month Number", YEAR ( [Date] ) * 100 + MONTH ( [Date] ),
+						"Day Of Month", DAY ( [Date] ),
+						"Month Day Number", MONTH ( [Date] ) * 100 + DAY ( [Date] ),
+						"Day Name", FORMAT ( [Date], "dddd", "en-GB" ),
+						"Day Of Week Number", WEEKDAY ( [Date], 2 ),
+						"Is Trading Day", WEEKDAY ( [Date], 2 ) <> 7
+					)
+
+	annotation PBI_Id = DimDate
+
