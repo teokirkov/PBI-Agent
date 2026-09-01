@@ -99,9 +99,11 @@ every headline figure was recomputed in the warehouse and reconciles to the
 penny with the pre-migration numbers, so no reported number moved. The encoding
 itself should still be fixed at source — logged as `ANALYSIS.md` §5.6.
 
-**Still not verified:** the `Databricks.Catalogs` navigation shape this skill
-documents has never been round-tripped through Power BI Desktop. It is
-deliberately written once, in a shared `DatabricksBiTasks` expression, so a
-correction on first open is a one-line fix rather than a seven-file one.
-Flagged in `projects/bi-task-1/NOTES.md` §6.1 at the same confidence level
-`queryGroup` carried — and `queryGroup` did turn out to be wrong.
+**Update, same day:** the navigation shape *was* wrong on first open, exactly
+as flagged — `Kind = "Catalog"` isn't a real value; the connector uses
+`Kind = "Database"` for that level. Confirmed against Microsoft's own
+Azure Databricks connector docs and fixed in the single shared
+`DatabricksBiTasks` expression (see `projects/bi-task-1/NOTES.md`, "Human,
+eighth Desktop attempt"). **Data refresh from Databricks is now confirmed
+working end to end in real Power BI Desktop** — this is no longer an open
+risk, it's a verified, working connection.
