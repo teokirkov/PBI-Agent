@@ -4,459 +4,300 @@ Run-to-run memory for this project (see `CLAUDE.md` §0). Every `@claude` run
 starts here.
 
 - **Project:** `projects/bi-task-1/`
+- **Deliverable:** `ToyCompanySales.pbip` (+ `.SemanticModel/`, `.Report/`)
 - **Brief:** `docs/assignment/bi-task-1.pdf`
 - **Source data:** `docs/sample-data/bi-task-1/` (7 `.xlsx` files)
-- **Status:** Discover + Profile complete. **Modeling not started** — blocked
-  on the open questions in the last section.
+- **Status:** **Semantic model complete** — Power Query, star schema,
+  relationships and all 22 measures are written. Report visuals are **not**
+  built (scaffolded pages only). Nothing is blocked; see §7 for what is open.
+
+### Read these first
+
+1. `docs/decisions/0002` … `0007` — the six answered cross-roads. They are the
+   reason the model looks the way it does.
+2. `GRAIN.md` — grain of every source file and every model table
+   (assignment task 4).
+3. `ANALYSIS.md` — business findings and, more importantly, the data problems.
+4. §6 below — the one thing a human must do before the project will open.
 
 ---
 
-## 1. What the assignment actually asks for
+## 1. What the assignment asks for
 
-Verbatim requirements extracted from the PDF, with what each one implies.
-
-**Goal.** An interactive report on the general performance of a toy company —
-"visually appealing and easy to navigate". Data covers several years of sales,
-customers and suppliers.
-
-| # | Task | Implication for this repo |
-|---|------|---------------------------|
-| 1 | Load the data sources | 7 Excel files → 7 Power Query queries |
-| 2 | Power Query: remove `_` from `SupplierReference` (Purchasing Supplier); trim `ColorName` (Warehouse Color) | Two **explicitly mandated** transforms. Both confirmed necessary against the data (§3). |
-| 3 | Create data model: dimensional **star schema**; Date dimension as a **calculated table** | Note: "calculated table" = DAX `CALENDAR`/`CALENDARAUTO`, *not* a Power Query query. That's an explicit instruction from the brief and it overrides the usual "prefer Power Query" default in `docs/best-practices/power-bi-best-practices.md`. |
-| 4 | Outline and describe the **level of granularity for every table** in a separate file | Satisfied by §2 of this file + `ANALYSIS.md` (to be written). The brief says "different file, e.g. Excel, Word" — a markdown doc in the repo is the git-native equivalent. |
-| 5 | Main KPIs (9 of them) | See table below |
-| 6 | Publish to Power BI Service, personal workspace | **Human follow-up** — out of agent scope |
+| # | Task | Status |
+|---|------|--------|
+| 1 | Load the data sources | **Done** — 7 files → 4 model queries + 3 staging expressions |
+| 2 | Power Query: remove `_` from `SupplierReference`; trim `ColorName` | **Done** — both, see §3 |
+| 3 | Star schema; Date dimension as a **calculated table** | **Done** — `Dim Date` is a DAX `CALENDAR()` calculated table, as mandated |
+| 4 | Document granularity of every table in a separate file | **Done** — `GRAIN.md` |
+| 5 | The 9 main KPIs | **Done** as measures; **not** as visuals |
+| 6 | Publish to Power BI Service | **Human follow-up** — out of agent scope |
 | 7 | Present the report | **Human follow-up** — out of agent scope |
 
-### The 9 required KPIs
+### The 9 KPIs → measures
 
-| KPI | Fully specified by the brief? |
-|-----|-------------------------------|
-| Unique order count | Yes — `DISTINCTCOUNT(Order ID)`. Data gives 67,628. |
-| Average order amount in £ | Mostly — "per order", so sales ÷ distinct orders. Depends on Q1/Q2 below. |
-| YTD, MTD sales — all and separated by categories (Online Sales Conditional) | Needs Q4 ("categories" is ambiguous — product category vs `OnlineSalesConditional`) |
-| YOY Sales | Yes, mechanically — but see the 2016 partial-year warning in §4 |
-| Online sales as a % of overall sales | Yes — `OnlineSalesConditional` is a **customer** attribute, not an order attribute (§3) |
-| TOP customers by number of orders and turnover | Yes |
-| Quantity and Sales by Supplier Name and Supplier Category Name | Yes |
-| Quantity and Sales by Category Names | **Needs Q3** — there are three category columns and they are not a clean hierarchy |
-| Quantity and Sales by Package Types | Yes |
-
-Currency: the brief says £ and the source amounts are £-prefixed text. No FX
-conversion is involved — it's a single-currency dataset.
+| KPI | Measure(s) |
+|---|---|
+| Unique order count | `[Order Count]` = 67,628 |
+| Average order amount in £ | `[Average Order Amount]` = £2,409.51 |
+| YTD, MTD sales — all and by category | `[Sales YTD]`, `[Sales MTD]`, sliced by `Dim Customer[Sales Channel]` (decision 0005) |
+| YOY sales | `[Sales YoY %]`, `[Sales YoY Change]`, `[Sales LY (Like-for-Like)]` (decision 0007) |
+| Online sales as % of overall | `[Online Sales %]` = 63.34%, plus `[Online Sales]` / `[Retail Sales]` |
+| TOP customers by orders and turnover | `[Customer Rank by Sales]`, `[Customer Rank by Orders]` + `[Total Sales]` / `[Order Count]` |
+| Quantity and Sales by Supplier Name and Supplier Category Name | `[Total Quantity]` / `[Total Sales]` by `Dim Supplier` |
+| Quantity and Sales by Category Names | by `Dim Category[Category]` — **overlapping by design**, decision 0004 |
+| Quantity and Sales by Package Types | by `Dim Package Type[Package Type]` |
 
 ---
 
-## 2. Table-by-table profile
+## 2. The model as built
 
-All row counts are data rows (header excluded). Every file has a single sheet
-named `Sheet1`.
+```
+                   Dim Date        Dim Customer
+                       |                |
+                       v                v
+                 +---------------------------+
+   Dim Supplier ->|       Fact Sales          |<- Dim Package Type
+                 |  (one row per order line) |
+                 +---------------------------+
+                             ^
+                             |
+                        Dim Product  <--(bi-directional)--  Bridge Product
+                                                            Category
+                                                                 |
+                                                                 v
+                                                            Dim Category
+```
 
-### 2.1 `Sales.xlsx` — 212,774 rows × 35 cols (34.2 MB)
-
-**Grain: one row per order line.** `OrderLineID` is unique across all 212,774
-rows — verified, zero duplicates, zero full-row duplicates.
-
-This file is **pre-joined and denormalized**: it flattens four source grains
-into one table — Order header → Order line → Invoice → Customer transaction.
-That is the single most important thing to know about it.
-
-| Column | Type | Notes |
-|---|---|---|
-| `OrderLineID` | int | **Primary key.** 212,774 distinct = row count |
-| `OrderID` | int | 67,628 distinct → avg 3.15 lines/order |
-| `CustomerID` | int | 660 distinct, all resolve to Customer |
-| `SalespersonPersonID` | int | 10 distinct — **no lookup table supplied** |
-| `PickedByPersonID` | float | 19 distinct, 21,667 blanks — no lookup table |
-| `ContactPersonID` | int | 660 distinct — no lookup table |
-| `BackorderOrderID` | float | populated on 18,957 rows (8.9%) — self-reference to another `OrderID` |
-| `OrderDate` | **text** | `"Tuesday, January 1, 2013"` — must be parsed. 990 distinct dates, 2013-01-01 → 2016-02-29 |
-| `ExpectedDeliveryDate` | **text** | same format; = OrderDate + 1 day on 73% of rows |
-| `CustomerPurchaseOrderNumber` | int | 9,970 distinct — degenerate attribute |
-| `IsUndersupplyBackordered` | text | **constant `"Yes"`** on every row → drop |
-| `PickingCompletedWhen` | datetime | **has a time component** (11:00, 12:00 …); 2,710 blanks |
-| `StockItemID` | int | 227 distinct — matches Stock Item exactly |
-| `PackageTypeID` | int | 4 distinct. **Redundant** — equals `StockItem.UnitPackageID` on 212,774/212,774 rows |
-| `Quantity` | int | total 8,504,253 |
-| `UnitPrice` | **text** | `"£230.00"` — currency-formatted text |
-| `UnitPrice.1` | float | **100% blank** → drop |
-| `UnitPrice.2` | float | numeric duplicate of `UnitPrice`; verified identical on every row. **Use this one**, drop the text version |
-| `TaxRate` | float | 0.15 or 0.10 |
-| `PickedQuantity` | int | total 8,189,581 — differs from `Quantity` on 2,710 rows |
-| `InvoiceID` | float | 64,819 distinct; **2,857 rows blank** (2,809 orders never invoiced) |
-| `BillToCustomerID` | float | 260 distinct — the paying parent of `CustomerID` |
-| `AccountsPersonID`, `PackedByPersonID` | float | no lookup tables |
-| `InvoiceDate`, `TransactionDate`, `FinalizationDate` | **text** | same long-date format. `InvoiceDate == TransactionDate` on 100% of rows; `FinalizationDate == InvoiceDate + 1 day` on 100% of rows |
-| `TotalDryItems` | float | 6 distinct |
-| `ConfirmedDeliveryTime` | datetime | **has a time component** |
-| `ConfirmedReceivedBy` | text | 660 distinct person names |
-| `CustomerTransactionID` | float | 1:1 with `InvoiceID` |
-| `AmountExcludingTax`, `TaxAmount`, `TransactionAmount` | **text** | `"£2,300.00"` — and see the grain warning immediately below |
-| `SupplierID` | int | 7 distinct. **Redundant** — equals `StockItem.SupplierID` on 212,774/212,774 rows |
-
-> #### ⚠️ Grain trap — the most important finding in this profile
->
-> `AmountExcludingTax`, `TaxAmount` and `TransactionAmount` are at **invoice
-> grain, repeated on every order line of that invoice**. Verified: across all
-> 64,819 invoices, zero have more than one distinct `AmountExcludingTax`;
-> invoices carry 1–5 lines each (only 5,135 are single-line).
->
-> `SUM(AmountExcludingTax)` over the line-grain fact table returns
-> **£583,888,532** against a true ex-tax total of **£158,081,488** — a
-> **3.69× overstatement**, and it silently looks plausible.
->
-> The safe line-grain measure is `Quantity * UnitPrice`. I verified this
-> reconciles **exactly** (to the penny, all 64,819 invoices) to the invoice
-> header amount: `AmountExcludingTax == SUM(Quantity * UnitPrice)` per invoice.
-> So nothing is lost by computing sales at line grain.
-
-### 2.2 `Customer.xlsx` — 663 rows × 36 cols
-
-**Grain: one row per customer.** `CustomerID` unique. 660 of 663 have sales;
-3 customers never ordered.
-
-Already denormalized — it has `CustomerCategoryName`, `BuyingGroupName`,
-`DealDescription` etc. flattened in, so no extra dimension tables are needed.
-
-Useful columns: `CustomerID` (PK), `CustomerName` (663 distinct),
-`CustomerCategoryName` (5: Novelty Shop 459, Supermarket 58, Computer Store 51,
-Gift Store 48, Corporate 47), `OnlineSalesConditional` (2: Online Sale 402,
-Retail Sale 261), `BuyingGroupName` (Tailspin Toys / Wingtip Toys / blank),
-`AccountOpenedDate` (date), `CreditLimit`, `BillToCustomerID`, delivery/postal
-address fields.
-
-Data quality:
-- **`OnlineSalesConditional` is a customer attribute, not a per-order flag.**
-  It is perfectly determined by `BuyingGroupName`: all 402 customers with a
-  buying group are "Online Sale", all 261 without are "Retail Sale". So
-  "online sales %" means *sales to online-type customers*, and computes to
-  **63.34%** of turnover (£103.2m of £163.0m). Flagging this because the KPI
-  wording implies an order-level flag, and there isn't one.
-- **7 constant or empty columns** → drop: `DeliveryMethodID` (always 3),
-  `StandardDiscountPercentage` (always 0), `IsStatementSent` (always False),
-  `IsOnCreditHold` (always False), `PaymentDays` (always 7), `DeliveryRun`
-  (100% blank), `RunPosition` (100% blank).
-- `BillToCustomerID` self-references `CustomerID` (263 distinct parents, 263
-  rows are their own bill-to) — a customer-hierarchy snowflake.
-- `CreditLimit` blank on 402/663; `BuyingGroupID`, `SpecialDealID`,
-  `DealDescription`, `StartDate`, `EndDate`, `DiscountPercentage` blank on
-  261/663 (exactly the Retail Sale customers).
-- `DeliveryCityID` / `PostalCityID` present (655 distinct) but **no City
-  lookup table was supplied** → no geography analysis is possible.
-- `DeliveryLocation` is WKT text (`POINT (-102.62 41.50)`) — not directly
-  usable by Power BI map visuals without parsing.
-
-### 2.3 `Warehouse Stock Item.xlsx` — 227 rows × 24 cols
-
-**Grain: one row per stock item (product).** `StockItemID` unique. All 227 are
-used in Sales.
-
-Key columns: `StockItemID` (PK), `StockItemName` (227 distinct), `SupplierID`
-(7 distinct), `ColorID` (7 distinct, **99/227 blank**), `UnitPackageID` (4),
-`OuterPackageID` (3), `Size` (43 distinct, 64 blank), `UnitPrice`,
-`RecommendedRetailPrice`, `TaxRate`, `TypicalWeightPerUnit`, `LeadTimeDays`,
-`QuantityPerOuter`, `IsChillerStock`, and `CategoryName1/2/3`.
-
-Data quality:
-- `InternalComments` **100% blank** → drop. `Brand` populated on only 18/227
-  (all "Northwind"). `Barcode` populated on only 8/227.
-- `CustomFields` is a JSON string (`{"CountryOfManufacture": "China", …}`) and
-  `Tags` is a JSON array string — parseable in Power Query if wanted, but not
-  required by any KPI.
-- **`CategoryName1/2/3` are not a clean hierarchy** — see Q3 in §5. C1 has 5
-  values, C2 has 6, C3 has 7; 2 C2-values roll up to more than one C1, and 3
-  C3-values roll up to more than one C2. Actual combinations present:
-
-  ```
-  Clothing            → Clothing            → Clothing            (16)
-  Clothing            → Clothing            → Furry Footwear      (24)
-  Clothing            → Clothing            → Novelty Items       ( 8)
-  Clothing            → Computing Novelties → T-Shirts            (26)
-  Computing Novelties → Computing Novelties → Novelty Items       ( 1)
-  Computing Novelties → Computing Novelties → USB Novelties       ( 1)
-  Computing Novelties → Mugs                → Novelty Items       (42)
-  Computing Novelties → Novelty Items       → USB Novelties       (13)
-  Novelty Items       → Novelty Items       → Novelty Items       ( 8)
-  Novelty Items       → Novelty Items       → Toys                (18)
-  Packaging Materials → Packaging Materials → Packaging Materials (67)
-  Toys                → Toys                → Toys                ( 3)
-  ```
-  `Clothing → Computing Novelties → T-Shirts` in particular reads like three
-  independent labels, not a drill path.
-
-### 2.4 `Purchasing Supplier.xlsx` — 13 rows × 26 cols
-
-**Grain: one row per supplier.** `SupplierID` unique. Only **7 of 13** suppliers
-appear in Sales — the other 6 will show blank in any supplier visual unless
-filtered out.
-
-Key columns: `SupplierID` (PK), `SupplierName` (13 distinct), `SupplierCategoryID`
-(8 distinct → FK to the catalogue table), `SupplierReference`, `PaymentDays`,
-bank details, contact details, addresses.
-
-Data quality:
-- **`SupplierReference` has a leading underscore on all 13 rows** (`_AA20384`,
-  `_B2084020`, …) → the brief's mandated `Text.Remove`/`Text.TrimStart` fix.
-  Confirmed necessary.
-- `InternalComments` populated on 2/13; `DeliveryMethodID` blank on 4/13;
-  `DeliveryAddressLine1` blank on 4/13.
-- Bank account columns (`BankAccountNumber`, `BankAccountCode`,
-  `BankInternationalCode`, `BankAccountName`, `BankAccountBranch`) are not
-  needed for any KPI and are mildly sensitive — recommend not loading them
-  (also satisfies "load only required columns").
-
-### 2.5 `Purchasing Supplier Catalogue.xlsx` — 9 rows × 2 cols
-
-**Grain: one row per supplier category.** `SupplierCategoryID` (PK) +
-`SupplierCategoryName`. All 8 categories used by suppliers resolve; 1 category
-is unused.
-
-This is a pure lookup — a snowflake level above Supplier. Per the modeling
-skill ("flatten dimension hierarchies into one dimension table rather than
-normalizing further" for small assignment datasets), I plan to **merge
-`SupplierCategoryName` into the Supplier dimension in Power Query** and not
-load this table separately.
-
-### 2.6 `Warehouse Color.xlsx` — 36 rows × 5 cols
-
-**Grain: one row per colour.** `ColorID` (PK) + `ColorName`. Only **7 of 36**
-colours are used by stock items, and 99/227 stock items have no colour at all.
-
-Data quality:
-- **21 of 36 `ColorName` values have leading and/or trailing whitespace**
-  (`"Azure      "`, `"      Black"`) → the brief's mandated `Text.Trim`.
-  Confirmed necessary. After trimming, all 36 names are still unique (trimming
-  does not create duplicates).
-- `ValidFrom` is **text with two inconsistent formats** — `"1/1/2013"` and
-  `"1/1/2016 4:00:00 PM"`. `ValidTo` is `9999-12-31` on all rows. These are
-  SCD bookkeeping columns; nothing depends on them and I plan to drop them
-  (also avoids the "don't store timestamps" rule).
-- `LastEditedBy` — audit column, drop.
-
-### 2.7 `Warehouse Package Type.xlsx` — 14 rows × 2 cols
-
-**Grain: one row per package type.** `PackageTypeID` (PK) + `PackageTypeName`
-(Bag, Block, Bottle, …). Only **4 of 14** appear in Sales.
-
----
-
-## 3. Referential integrity — all clean
-
-Checked every candidate join. **Zero orphans anywhere**:
-
-| Relationship | Distinct FK values | Orphans | Unused dim members |
+| Table | Rows | Grain | Query type |
 |---|---|---|---|
-| Sales.CustomerID → Customer.CustomerID | 660 | 0 | 3 |
-| Sales.StockItemID → StockItem.StockItemID | 227 | 0 | 0 |
-| Sales.PackageTypeID → PackageType.PackageTypeID | 4 | 0 | 10 |
-| Sales.SupplierID → Supplier.SupplierID | 7 | 0 | 6 |
-| Sales.BillToCustomerID → Customer.CustomerID | 260 | 0 | 403 |
-| StockItem.SupplierID → Supplier.SupplierID | 7 | 0 | 6 |
-| StockItem.ColorID → Color.ColorID | 7 | 0 | 29 |
-| StockItem.UnitPackageID → PackageType.PackageTypeID | 4 | 0 | 10 |
-| StockItem.OuterPackageID → PackageType.PackageTypeID | 3 | 0 | 11 |
-| Supplier.SupplierCategoryID → Catalogue.SupplierCategoryID | 8 | 0 | 1 |
+| `Fact Sales` | 212,774 | one order line | M |
+| `Dim Date` | 1,461 | one day, 2013-01-01 → 2016-12-31 | **DAX calculated table** |
+| `Dim Customer` | 663 | one customer | M |
+| `Dim Product` | 227 | one stock item (colour merged in) | M |
+| `Dim Supplier` | 13 | one supplier (category merged in) | M |
+| `Dim Package Type` | 14 | one package type | M |
+| `Dim Category` | 9 | one product stock-group tag | M |
+| `Bridge Product Category` | 441 | one product-category membership | M (hidden) |
+| `_Measures` | 1 | none — holds the 22 measures | DAX calculated table |
 
-Two **redundant FKs on the fact** worth noting — both are 100% derivable from
-`StockItemID`:
-- `Sales.SupplierID` == `StockItem.SupplierID` on all 212,774 rows
-- `Sales.PackageTypeID` == `StockItem.UnitPackageID` on all 212,774 rows
-  (it matches `OuterPackageID` on only 174,853 — so it is specifically the
-  *unit* package)
+Staging queries (M expressions, **not loaded as tables**): `SourceFolderPath`
+(parameter), `stgColor`, `stgSupplierCategory`, `stgStockItem`.
 
-Keeping them as direct fact→dim relationships is fine and avoids snowflaking
-through Stock Item; they carry no extra information but they do make the star
-flatter. See Q5.
+Seven source files collapse to six loaded dimensions plus one bridge, because
+Colour and Supplier Catalogue are flattened into their parents rather than
+snowflaked.
 
-## 4. Date coverage
+### Figures the model must reproduce
 
-- Order dates run **2013-01-01 → 2016-02-29**, 990 distinct dates over a
-  1,155-day span.
-- The 165 missing days are **all Sundays** — the company doesn't trade on
-  Sundays. This is normal and is exactly why the Date dimension must be a
-  generated contiguous calendar rather than a distinct list of order dates.
-- **2016 is a partial year** (2 months only). Headline yearly figures:
+Computed directly from the source files, independent of the model — use these
+to check the refresh in Desktop:
 
-  | Year | Orders | Lines | Quantity | Sales (ex-tax) | Avg order |
-  |---|---|---|---|---|---|
-  | 2013 | 19,450 | 61,655 | 2,473,653 | £46,928,592.80 | £2,412.78 |
-  | 2014 | 21,199 | 66,852 | 2,672,973 | £51,492,003.40 | £2,428.98 |
-  | 2015 | 23,329 | 73,003 | 2,873,250 | £55,817,887.45 | £2,392.64 |
-  | 2016 | 3,650 | 11,264 | 484,377 | £8,711,620.80 | £2,386.75 |
+| | |
+|---|---|
+| Total Sales | **£162,950,104.45** |
+| Order Count | **67,628** |
+| Order Line Count | 212,774 |
+| Total Quantity | 8,504,253 |
+| Average Order Amount | **£2,409.51** |
+| Online Sales % | **63.34%** |
+| Uninvoiced Sales | £4,868,616.00 (2,809 orders, 3.0%) |
+| Last Sales Date | 2016-02-29 |
+| `[Sales YoY %]` for 2016 | **−1.7%** (£8,711,620.80 vs £8,863,884.50) |
+| `[Sales YoY %]` for 2015 | +8.4% (£55,817,887.45 vs £51,492,003.40) |
+| Sum of category subtotals | £265,811,434.65 = **1.63×** the grand total (expected — decision 0004) |
 
-  **YoY for 2016 will look catastrophic (-84%) and will be wrong as a business
-  statement.** The report needs either a same-period-last-year comparison or a
-  visible "data through 2016-02-29" caveat. Raising now rather than after the
-  measures are built.
-- `PickingCompletedWhen` extends to 2016-05-30, past the last order date.
-- Date dimension should therefore span **2013-01-01 → 2016-12-31** (full years,
-  per the usual rule that a date table covers whole years).
-
-Sanity-check figures the finished model should reproduce (line grain, ex-tax,
-all lines including uninvoiced):
-- Unique orders: **67,628**
-- Total sales: **£162,950,104.45**
-- Average order amount: **£2,409.51**
-- Online sales share: **63.34%**
-- Top customer by turnover: Mauno Laurila, £360,352.70 across 112 orders
-
-## 5. Proposed model — star schema
-
-One fact, five dimensions. `Sales.xlsx` is already close to a star once the
-invoice-grain columns are handled, so no bridge tables are needed.
-
-```
-              Dim Date        Dim Customer
-                  |                |
-                  v                v
-              +---------------------------+
-Dim Supplier->|      Fact Sales           |<- Dim Package Type
-              |  (one row per order line) |
-              +---------------------------+
-                            ^
-                            |
-                      Dim Product
-                    (+ Colour merged in)
-```
-
-### Fact Sales — grain: **one row per order line** (212,774 rows)
-
-Keys: `OrderLineID` (degenerate PK), `OrderID` (degenerate, for distinct order
-count), `CustomerID`, `StockItemID`, `SupplierID`, `PackageTypeID`, `OrderDate`
-(→ Dim Date).
-
-Measures/numerics: `Quantity`, `PickedQuantity`, `UnitPrice` (from
-`UnitPrice.2`), `TaxRate`, and a **Power Query calculated column
-`Line Amount = Quantity * UnitPrice`** (per the best-practices rule preferring
-Power Query calculated columns over DAX ones).
-
-Dropped from the fact: `UnitPrice` (text), `UnitPrice.1` (empty),
-`IsUndersupplyBackordered` (constant), `AmountExcludingTax` / `TaxAmount` /
-`TransactionAmount` (invoice grain — the trap in §2.1), `InvoiceDate` /
-`TransactionDate` / `FinalizationDate` (all derivable from each other and
-near-identical to `OrderDate`), the five unresolvable person IDs,
-`ConfirmedReceivedBy`, `ConfirmedDeliveryTime`, `PickingCompletedWhen`,
-`TotalDryItems`, `CustomerTransactionID`, `BillToCustomerID`,
-`CustomerPurchaseOrderNumber` — none is needed by any of the 9 KPIs. Easy to
-add back if wanted; listing them so the omission is a visible choice.
-
-### Dimensions
-
-| Dimension | Source | Grain | Key | Rows |
-|---|---|---|---|---|
-| **Dim Date** | DAX calculated table (`CALENDAR`) | one row per day | `Date` | 1,461 (2013-01-01 → 2016-12-31) |
-| **Dim Customer** | `Customer.xlsx` | one row per customer | `CustomerID` | 663 |
-| **Dim Product** | `Warehouse Stock Item.xlsx` + `Warehouse Color.xlsx` merged | one row per stock item | `StockItemID` | 227 |
-| **Dim Supplier** | `Purchasing Supplier.xlsx` + `Purchasing Supplier Catalogue.xlsx` merged | one row per supplier | `SupplierID` | 13 |
-| **Dim Package Type** | `Warehouse Package Type.xlsx` | one row per package type | `PackageTypeID` | 14 |
-
-Plus a **Measures** table (empty table holding all explicit measures), per the
-best-practices Development Checklist.
-
-All relationships single-direction, many (fact) → one (dim), no bidirectional
-filtering, no many-to-many. **7 source files → 5 loaded dimensions**, because
-Colour and Supplier Catalogue are merged into their parents in Power Query
-(flatten-don't-snowflake, per the modeling skill) and their queries have load
-disabled.
-
-### Power Query work required
-
-Mandated by the brief:
-1. `Purchasing Supplier`: strip leading `_` from `SupplierReference`
-2. `Warehouse Color`: `Text.Trim` on `ColorName`
-
-Required by the data (not in the brief, but necessary):
-3. Parse the five text date columns from `"Tuesday, January 1, 2013"` — needs
-   an explicit locale (`en-US`/`en-GB`) in `Date.FromText`, otherwise this
-   breaks on a differently-localed machine. Best-practices doc calls out
-   locale awareness specifically.
-4. Parse `"£2,300.00"`-style currency text to decimal — or sidestep it entirely
-   by using `UnitPrice.2` (already numeric) and computing `Line Amount`
-   ourselves, which is what I propose.
-5. Type every column explicitly; `Date` type (not `Date/Time`) on all dates.
-6. Drop the constant/empty columns listed in §2.
-7. Merge Colour → Stock Item, Supplier Catalogue → Supplier.
-8. Group queries into folders (Facts / Dimensions / Staging).
+Per-year: 2013 £46,928,592.80 / 19,450 orders · 2014 £51,492,003.40 / 21,199 ·
+2015 £55,817,887.45 / 23,329 · 2016 (Jan–Feb) £8,711,620.80 / 3,650.
 
 ---
 
-## 6. Open questions — blocking, per `CLAUDE.md` §1
+## 3. The two mandated Power Query fixes
 
-Posted on issue #1. Modeling does not start until these are answered; each one
-would be expensive to unwind after measures and visuals are built on top.
+Both confirmed necessary against the actual data.
 
-**Q1 — Which sales amount is "sales"?** Confirmed above that
-`AmountExcludingTax` is invoice grain (3.69× inflation if summed at line
-grain), and that `Quantity * UnitPrice` reconciles to it exactly per invoice.
-My recommendation: define **Total Sales = SUMX(Fact Sales, Quantity *
-UnitPrice)**, ex-tax, at line grain. Alternative: define sales tax-inclusive
-(`TransactionAmount` equivalent, +10–15%). The brief says "Average order amount
-in £" without specifying — I need gross-vs-net confirmed before writing any
-measure, because all 9 KPIs depend on it.
-
-**Q2 — Include the 2,857 uninvoiced order lines (2,809 orders)?** These are
-ordered but never invoiced. Including them: 67,628 orders / £162,950,104.
-Excluding them: 64,819 orders / £158,081,488 — a £4.87m (3.0%) difference.
-"Unique order count" and "Average order amount" both move. My recommendation:
-**include them** and treat the metric as order-based (the brief says "order
-count", not "invoice count"), but this is a business call.
-
-**Q3 — "Quantity and Sales by Category Names" — which category?** There are
-three columns (`CategoryName1/2/3`) and they are **not a valid hierarchy** (§2.3:
-2 C2-values roll up to multiple C1-values, 3 C3-values roll up to multiple
-C2-values; `Clothing → Computing Novelties → T-Shirts` is the clearest
-example). Options: (a) expose all three as three independent attributes on Dim
-Product and let the user pick — my recommendation, it's honest about the data;
-(b) pick one as *the* category; (c) build a proper category dimension +
-bridge, accepting a many-to-many and its double-counting risk. The plural
-"Category Names" in the brief hints at (a). Per the modeling skill, "a product
-in multiple categories" is an explicit escalation trigger — not mine to decide.
-
-**Q4 — "YTD, MTD sales – all and separated by categories (Online Sales
-Conditional)".** The parenthetical suggests "categories" here means
-`OnlineSalesConditional` (Online Sale / Retail Sale), but "categories" could
-equally mean `CustomerCategoryName` (5 values) or the product categories from
-Q3. My reading: **`OnlineSalesConditional`**, since the brief names it
-explicitly. Confirming because it changes how many measure variants get built.
-
-**Q5 — Keep `SupplierID` and `PackageTypeID` as direct fact→dim
-relationships, or snowflake through Dim Product?** Both are 100% derivable from
-`StockItemID` (§3), so either is correct — no data is at risk. Direct
-relationships give a flatter star and simpler DAX; going through Dim Product
-gives a smaller fact table and one obvious source of truth per attribute. My
-recommendation: **keep both as direct fact→dim relationships** (flatter star,
-matches how the brief phrases the KPIs). Low-stakes, but it changes the model
-diagram, so worth one line of confirmation rather than a later rebuild.
-
-**Q6 (non-blocking, flagging early) — 2016 is a partial year** (ends
-2016-02-29). YoY 2016 vs 2015 reads as -84% and is meaningless as stated. Do
-you want the YoY measure to compare like-for-like periods
-(`DATESINPERIOD`/same-period-last-year to the same cut-off), or plain
-`SAMEPERIODLASTYEAR` with a caveat on the report page? Won't block modeling —
-I'll build plain YoY and note it — but it affects the analysis write-up.
+1. **`SupplierReference`** (`Dim Supplier`). **Correction to the earlier
+   profile**, which said the underscore was always leading — it is not. 8 of
+   the 13 values carry it in front (`_AA20384`), 5 carry it trailing
+   (`082420938_`). A `Text.TrimStart(_, "_")` would have silently left five
+   values dirty. Implemented as `Text.Remove(_, {"_"})`.
+2. **`ColorName`** (`stgColor`). 21 of 36 values have leading and/or trailing
+   whitespace. `Text.Trim` fixes it and does not create duplicates — all 36
+   names stay unique. `"      Steel Gray"` has a legitimate internal space,
+   which `Text.Trim` correctly leaves alone.
 
 ---
 
-## 7. Human follow-up (out of agent scope)
+## 4. Resolved cross-roads
 
-From `docs/best-practices/power-bi-best-practices.md`, the items this agent
-cannot do — for the human opening the `.pbip` in Desktop:
+All six questions from the previous run were answered on issue #1 and are
+logged permanently:
 
-**Pre-development (Desktop settings):** disable "Update or delete relationships
-when refreshing data", "Autodetect new relationships after data is loaded",
-**"Auto date/time"** (important — the brief mandates a custom Date table),
-Q&A if unused, and background data preview download; set Data Cache Management
-to max; apply the client colour template.
+| Q | Decision | File |
+|---|---|---|
+| Q1 | Sales = `Quantity × Unit Price`, ex-tax, line grain | `docs/decisions/0002` |
+| Q2 | Include uninvoiced orders; surface them in a visual and the analysis | `docs/decisions/0003` |
+| Q3 | Categories are a many-to-many → `Dim Category` + bridge, plus an additive `Category Group` | `docs/decisions/0004` |
+| Q4 | "Categories" in the YTD/MTD KPI = `OnlineSalesConditional` → `Sales Channel` | `docs/decisions/0005` |
+| Q5 | Flat star — Supplier and Package Type join the fact directly | `docs/decisions/0006` |
+| Q6 | Like-for-like YoY, prior year cut at the same month/day | `docs/decisions/0007` |
 
-**Report layer:** per `CLAUDE.md` §2, TMDL does not describe visuals reliably.
-Whatever report definition gets generated needs a human pass in Desktop —
-page size 1920×1080, filter pane over on-canvas slicers, test cross-page
-interactions, configure the default page.
+Q3 and Q4 were delegated back to the agent ("use your skills to decide"). Q3
+turned out to be settled by evidence rather than judgement — all 227 of 227
+stock-item rows are alphabetically non-decreasing across `CategoryName1/2/3`,
+which is not something a real hierarchy does. See `ANALYSIS.md` §3.1.
 
-**Service / release (brief tasks 6 and 7):** publish to the personal workspace,
-configure and test refresh, validate the data in the Service, configure user
-access, then present.
+---
+
+## 5. Self-check against the Development Checklist
+
+From `docs/best-practices/power-bi-best-practices.md`, model-authoring items
+only (the Desktop/Service/Release items are in §6).
+
+| Item | Status |
+|---|---|
+| Power Query step names describe what they do | Yes — `Source`, `PromotedHeaders`, `SelectedColumns`, `CleanedSupplierReference`, …, ending in `Result` |
+| Combine similar actions into one step | Yes — one `Table.RenameColumns` and one `Table.TransformColumnTypes` per query |
+| Queries organised into folders | Yes — `Staging`, `Model\Facts`, `Model\Dimensions`. **See the caveat in §6.1** |
+| Correct data type on every column | Yes — sources load with `delayTypes = true`, so nothing is auto-typed and every surviving column is typed explicitly |
+| Use parameters | Yes — `SourceFolderPath`; no absolute path is hardcoded anywhere |
+| Filter early | N/A — no rows are filtered out (decision 0003 keeps all of them). Column selection is done as early as possible |
+| Query folding | N/A — `.xlsx` sources do not fold |
+| Disable load for tables not needed | Yes — the 3 staging queries are M expressions with no table, so they cannot load |
+| One-to-many Dim→Fact, star schema | Yes — all 7 relationships are many-to-one |
+| Avoid bi-directional filters | **One deliberate exception** — the bridge. Documented in decision 0004; **needs a correctness test in Desktop**, see §6.2 |
+| Avoid many-to-many | **One, inherent to the source data.** Same exception, same test |
+| Be aware of report locale | Yes — model culture `en-GB`; dates parsed with an explicit `en-US` culture (the source format is US long-date); `FORMAT` calls in `Dim Date` pass `"en-GB"` explicitly so month and day names do not shift with the machine |
+| Custom Date table | Yes — `Dim Date`, a DAX calculated table per the brief, marked as a date table (`dataCategory: Time` + `isKey` on `Date`) |
+| Load only required columns | Yes — 35 source columns on `Sales.xlsx` reduce to 12; 36 on `Customer.xlsx` to 7; 24 on `Warehouse Stock Item.xlsx` to 9; 26 on `Purchasing Supplier.xlsx` to 5 |
+| Hide fields not used in the report | Yes — every FK, `Line Amount`, `Quantity`, `Picked Quantity`, `Tax Rate`, `Order Date`, and the whole bridge table |
+| Calculated column in Power Query, not DAX | Yes — `Line Amount` and `Category Group` are both M. The only DAX-computed table is `Dim Date`, which the brief mandates |
+| Auto-summarisation off for non-additive fields | Yes — `summarizeBy: none` on every ID, price and rate |
+| Business names on fields and tables | Yes — renamed in Power Query, not cosmetically. Every renamed column carries its source name in a TMDL `///` description |
+| Don't store timestamps | Yes — `PickingCompletedWhen` and `ConfirmedDeliveryTime` both carry times and are not loaded |
+| `Date` type, not `Date/Time` | Yes in M (`type date`). Note TMDL/TOM has only `dateTime`, so the columns read `dataType: dateTime` with a date-only `formatString` — that is the correct representation, not an oversight |
+| Measures table, with subfolders | Yes — `_Measures`, 22 measures across `Sales`, `Sales\Time Intelligence`, `Sales\Channel`, `Sales\Order Fulfilment`, `Ranking` |
+| Report page size 1920×1080 | Yes on all 6 scaffold pages |
+| Always format DAX | Yes |
+| No implicit measures | Yes — and enforced at model level with `discourageImplicitMeasures`, not just by convention |
+| Configure the default page | Yes — `activePageName: overview` |
+| Could DAX transformations be Power Query instead? | Checked — only `Dim Date` is DAX, and only because the brief requires it |
+
+### Dataset size
+
+`.SemanticModel/` is 43 KB and `.Report/` 2.7 KB on disk — PBIP stores no data,
+so this is the definition only. The source workbooks total 34.5 MB, and the
+loaded model is one 212,774-row fact of 13 narrow, low-cardinality columns plus
+six tiny dimensions. Nowhere near the 200 MB flag threshold, and with the data
+window fixed at 2013–2016 there is no growth path toward 1 GB. No optimisation
+warranted.
+
+---
+
+## 6. Human follow-up
+
+### 6.1 Before the project will open — required
+
+**Set the `SourceFolderPath` parameter.** It defaults to
+`C:\repos\PBI-Agent\docs\sample-data\bi-task-1\`, which is almost certainly not
+where your checkout is. In Desktop: *Transform data → Manage Parameters →
+SourceFolderPath*. It needs a **trailing backslash**. Nothing else in the model
+hardcodes a path.
+
+**If Desktop rejects the query folders**, delete the `queryGroup:` lines from
+the table partitions and expressions, and the `PBI_QueryGroups` annotation from
+`model.tmdl`. That is the one construct here I could not verify against a real
+Desktop export — it only affects how queries are grouped in the Power Query
+navigator, so removing it costs nothing but the folder organisation.
+
+**Honest statement of confidence:** this TMDL was hand-authored on a Linux CI
+runner with no Power BI Desktop available, so it has never been round-tripped
+through Desktop. Cross-references were validated by script (every relationship
+column, every measure reference, every `sortByColumn` target, every M
+expression reference and every `sourceColumn` resolves), but that checks
+consistency, not that Desktop accepts every keyword. Expect the first open to
+possibly surface syntax nits. The constructs I am least certain of, in order:
+`queryGroup` / `PBI_QueryGroups`; `discourageImplicitMeasures`; the `.Report`
+PBIR JSON. If the report folder is the problem, deleting
+`ToyCompanySales.Report/` and letting Desktop regenerate a blank report loses
+nothing — it holds six empty pages and no visuals.
+
+### 6.2 Test before trusting
+
+**The category bridge.** It is the model's only bidirectional relationship and
+only many-to-many. Check in Desktop that:
+- `[Total Sales]` with no category filter = **£162,950,104.45**
+- a table of `Dim Category[Category]` × `[Total Sales]` sums to
+  **£265,811,434.65** across the rows while the total row still shows
+  £162,950,104.45 — that discrepancy is correct and expected (decision 0004)
+- `Dim Product[Category Group]` × `[Total Sales]` **does** sum to the grand
+  total
+
+### 6.3 Desktop settings (pre-development checklist)
+
+Disable "Update or delete relationships when refreshing data", "Autodetect new
+relationships after data is loaded", **"Auto date/time"** (the model sets
+`__PBI_TimeIntelligenceEnabled = 0`, but confirm it in the UI — the brief
+mandates a custom date table), Q&A if unused, and background data preview
+download. Set Data Cache Management to max. Apply the client colour template.
+
+### 6.4 Report layer
+
+Six pages exist with correct 1920×1080 sizing and **no visuals**:
+*Overview*, *Sales Trend & YoY*, *Customers*, *Products & Categories*,
+*Suppliers & Packaging*, *Data Quality & Caveats*. Per `CLAUDE.md` §2, TMDL/PBIR
+does not describe visuals in a way that is practical to hand-author reliably,
+and the trigger comment asked for the model layer. Building them out is either a
+human pass in Desktop or a follow-up run — see §7.
+
+`ANALYSIS.md` §4 lists four captions that should go **on the canvas**, not just
+in the docs. The most important is "Data through 29 February 2016".
+
+Also from the checklist, all human-only: test cross-page interactions, hide/lock
+report-level filters, sync slicers where needed, prefer the filter pane over
+on-canvas slicers, check whether custom visuals are allowed, configure RLS if
+required.
+
+### 6.5 Service / release (brief tasks 6 and 7)
+
+Publish to the personal workspace, configure and test manual and scheduled
+refresh, validate the data in the Service, configure user access, then present.
+Note the refresh will fail in the Service until the source files are reachable
+from there — the current setup is a manual file drop into the repo (see
+`.claude/skills/sharepoint-data-ingestion/SKILL.md`).
+
+---
+
+## 7. Open items
+
+None of these blocks anything — the requested scope is complete. They are
+choices for the next run or the human, not unanswered cross-roads.
+
+1. **Build the report visuals?** Not requested in this run's trigger comment
+   and not attempted. If a future run should attempt them, say so explicitly,
+   because the confidence caveat in §6.1 applies double to PBIR visual JSON.
+2. **Naming convention tension, worth one line of confirmation.**
+   `docs/best-practices/power-bi-best-practices.md` says tables need clear
+   business names with "no `DIM`/`FACT` prefix needed", while
+   `.claude/skills/pbip-tmdl-structure/SKILL.md` mandates `Fact <Subject>` /
+   `Dim <Subject>`. The best-practices doc is supposed to win on conflict, but
+   the previous run proposed `Fact Sales` / `Dim Customer` naming and that
+   proposal was approved on issue #1, so this model uses the prefixes. If the
+   best-practices reading is the intended one, renaming is cheap now and
+   expensive after visuals are bound to field names. **One of the two documents
+   should be corrected either way.**
+3. **Skill file bug.** `.claude/skills/pbip-tmdl-structure/SKILL.md` gives
+   `crossFilteringBehavior: singleDirection` as the single-direction value. The
+   TOM enum is `oneDirection`. This model sidesteps it by omitting the property
+   wherever the default (one direction) is wanted and only stating
+   `bothDirections` explicitly, but the skill file should be fixed.
+4. **Model viewer layout tabs.** The team convention (one tab with all facts
+   bottom / dims top, one tab per fact) is not expressible in hand-authored
+   TMDL. Arrange in Desktop's model view.
+5. **Business questions raised by the data**, listed in `ANALYSIS.md` §5 — the
+   most useful being: request the underlying product-to-stock-group table
+   instead of the flattened `CategoryName1/2/3` columns, and investigate why
+   unpicked orders rose from 2.31% to 6.71% of the book in three years.
 
 ---
 
@@ -464,14 +305,22 @@ access, then present.
 
 | Date | Run | What happened |
 |---|---|---|
-| 2026-09-01 | issue #1, "Start BI Task 1" | Discover + Profile only, as instructed. Read the brief, profiled all 7 files, verified referential integrity and grain, wrote this file. **Stopped before modeling** — six open questions posted to issue #1. No PBIP/TMDL created yet. |
+| 2026-09-01 | issue #1, "Start BI Task 1" | Discover + Profile only, as instructed. Profiled all 7 files, verified referential integrity and grain. Stopped before modeling; six questions posted. Branch `claude/issue-1-20260901-1007`. |
+| 2026-09-01 | issue #1, answers to Q1–Q6 | Built the semantic model: PBIP scaffold, 4 model queries + 3 staging expressions, 7 relationships, `Dim Date` calculated table, 22 measures. Logged decisions 0002–0007. Wrote `GRAIN.md` and `ANALYSIS.md`, rewrote this file. Determined Q3 from the data (categories are a many-to-many). Corrected the earlier `SupplierReference` finding. Report visuals not built. Branch `claude/issue-1-20260901-1026`. |
+
+> **Note for the next run:** the first run's `NOTES.md` was left on its own
+> branch and was **not** on `main`, so this run had to recover it with
+> `git checkout origin/claude/issue-1-20260901-1007 -- projects/bi-task-1/NOTES.md`.
+> Since `CLAUDE.md` §0 makes `NOTES.md` the only run-to-run memory, that memory
+> is only actually durable once the branch is merged. **Merge the PR** — or, if
+> a run finds no `NOTES.md` for a project that the issue thread clearly says has
+> one, check the other `claude/*` branches before concluding the work never
+> happened.
 
 ### Next run should
 
-1. Read the answers to Q1–Q6 in issue #1.
-2. Record each as a numbered file in `docs/decisions/` (template:
-   `docs/decisions/0000-template.md`). Note `0001` is taken (bash scope).
-3. Update §6 of this file to mark them resolved, and update §5 if the answers
-   change the proposed model.
-4. Then, and only then, start on the PBIP/TMDL per
-   `.claude/skills/pbip-tmdl-structure/SKILL.md`.
+1. Read `docs/decisions/0002`–`0007` before touching anything — they encode
+   choices that are expensive to unwind.
+2. Confirm whether report visuals are wanted (§7.1) before attempting them.
+3. Verify against the reconciliation figures in §2 if the model has been opened
+   in Desktop by then.
