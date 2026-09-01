@@ -103,18 +103,41 @@ Key rules:
 - Set `summarizeBy: none` on any numeric column that is a key or shouldn't
   auto-aggregate (e.g. an ID stored as a number) — leaving Power BI's default
   aggregation on ID-like numeric columns is a common, easy-to-miss mistake.
-- **`///` doc-comments must be immediately followed by the object they
-  document — no blank line in between.** Confirmed against real Power BI
-  Desktop (June 2026 release), which threw a hard parse error
-  (`InvalidLineType: Unexpected line type: Empty!`) on a `///` block that
-  wasn't attached to anything, followed by a blank line, followed by another
-  `///` block attached to the next declaration. `///` opens a "pending
-  documentation" state that a blank line cannot appear inside before it
-  attaches. Any comment that is **not** immediately above the one thing it
-  documents — a file-level header note, a comment between two declarations
-  for spacing/readability — must use plain `//` instead, which has no such
-  restriction. When in doubt, use `//`; reserve `///` only for a comment
-  block with zero blank lines between it and the declaration directly below.
+- **TMDL has exactly one comment form at the document level: `///`, and it
+  must attach with zero blank lines to the object it documents.** Confirmed
+  against real Power BI Desktop (June 2026 release), across two separate
+  errors:
+  1. A `///` block with a blank line before the object it documents (or
+     before a second `///` block) fails with
+     `InvalidLineType: Unexpected line type: Empty!` — `///` opens a
+     "pending documentation" state that cannot contain a blank line before
+     it attaches to a declaration.
+  2. **`//` (double-slash) is not valid TMDL syntax at all** — Desktop's
+     parser doesn't recognize it as any known line type and fails with
+     `InvalidLineType: Unexpected line type: Other!`. Don't reach for `//`
+     as a workaround for problem 1; it produces a different failure, not a
+     fix. (`//` *is* valid — but only inside an M expression, i.e. within a
+     `partition ... = m` / `source =` block. That's a different, nested
+     language with its own comment syntax, not the TMDL document itself.)
+
+  The only correct pattern for a comment that logically covers more than
+  just the next single declaration (e.g. general context before the first
+  of several related objects) is one continuous `///` block with **no
+  blank text lines**, using a bare `///` (three slashes, nothing after) as
+  a paragraph break where you'd otherwise want a blank line:
+
+  ```tmdl
+  /// General context that applies to everything below.
+  ///
+  /// Then the specific note for the object immediately following.
+  relationship Sales_OrderDate_to_Date
+  	fromColumn: 'Sales'.'Order Date'
+  	toColumn: 'Date'.Date
+  ```
+
+  If a comment doesn't belong to any specific following object at all,
+  don't force it into a `///` block — put that context in the project's
+  `NOTES.md`/`ANALYSIS.md` instead, or drop it.
 
 ## Relationships
 

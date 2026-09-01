@@ -1,9 +1,9 @@
-// All relationships are many (fact or bridge) to one (dimension), and all are
-// single-direction except the one bridge relationship called out below.
-// Cardinality and cross-filtering are left at the TMDL defaults
-// (many-to-one, one direction) wherever that is what is wanted, so anything
-// stated explicitly here is a deliberate departure.
-
+/// All relationships are many (fact or bridge) to one (dimension), and all are
+/// single-direction except the one bridge relationship called out below.
+/// Cardinality and cross-filtering are left at the TMDL defaults
+/// (many-to-one, one direction) wherever that is what is wanted, so anything
+/// stated explicitly here is a deliberate departure.
+///
 /// Order Date is the model's single analytical date. The fact table also
 /// carried invoice, transaction and finalization dates, but all three are
 /// derivable from each other and within a day of the order date, so there are
