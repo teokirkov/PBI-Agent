@@ -170,6 +170,29 @@ could push it past 1GB over time — per team convention, that's worth a
 comment recommending optimization (unused columns, split fact grain, etc.)
 rather than building forward as if size were a non-issue.
 
+## The root `.pbip` file's schema
+
+Confirmed against real Power BI Desktop (June 2026 release) after it
+rejected a wrong value here: the root `<ProjectName>.pbip` file's `$schema`
+must be exactly
+`https://developer.microsoft.com/json-schemas/fabric/pbip/pbipProperties/1.0.0/schema.json`
+— **not** `fabric/item/pbip/definitionProperties/...` (that `item/`-prefixed
+pattern is for report/dataset definition files, e.g. `definition.pbir` uses
+`fabric/item/report/definitionProperties/...`; the root pbip pointer file
+is a different, non-`item` schema family). Desktop fails to open the
+project at all if this is wrong, before it even gets to validate anything
+else — so it's worth getting this one exactly right rather than leaving it
+to the Desktop-rejection fallback table below.
+
+```json
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/pbip/pbipProperties/1.0.0/schema.json",
+  "version": "1.0",
+  "artifacts": [{ "report": { "path": "<ProjectName>.Report" } }],
+  "settings": { "enableAutoRecovery": true }
+}
+```
+
 ## Validating your own output
 
 Before finishing a run that touched TMDL, sanity-check:
