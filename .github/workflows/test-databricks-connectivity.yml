@@ -1,0 +1,27 @@
+name: Test Databricks Connectivity
+on:
+  workflow_dispatch:
+    inputs:
+      hostname:
+        description: 'Databricks workspace hostname only, no https:// (e.g. adb-1234567890123456.7.azuredatabricks.net, or your-account.cloud.databricks.com)'
+        required: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DBX_HOST: ${{ inputs.hostname }}
+    steps:
+      - name: Test HTTPS reachability (no credentials needed)
+        run: |
+          echo "Resolving and connecting to https://$DBX_HOST ..."
+          set +e
+          curl -sS -o /dev/null -w "HTTP status: %{http_code}\n" --max-time 10 "https://$DBX_HOST/api/2.0/clusters/list"
+          STATUS=$?
+          set -e
+          echo ""
+          if [ $STATUS -eq 0 ]; then
+            echo "REACHABLE: curl completed and got an HTTP response above (401/403 is expected and fine here - no credentials were sent; any status code at all means the network path is open)."
+          else
+            echo "NOT REACHABLE: curl failed with exit code $STATUS (DNS failure, connection refused, or timeout - the runner cannot reach this host on the network)."
+            exit 1
+          fi
