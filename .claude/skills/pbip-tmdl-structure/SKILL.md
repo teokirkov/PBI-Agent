@@ -36,19 +36,35 @@ projects/<project-name>/
 ```
 
 Use `PascalCase` for `<ProjectName>` and table names, matching the source
-entity they represent (e.g. `Sales`, `Customer`, `DateDimension` →
-prefer `Dim Customer` / `Fact Sales` naming — see naming convention below).
+entity they represent (e.g. `Sales`, `Customer`, `Product`).
 
 ## Naming convention
 
-- Fact tables: `Fact <Subject>` (e.g. `Fact Sales`)
-- Dimension tables: `Dim <Subject>` (e.g. `Dim Customer`, `Dim Date`)
-- Always include an explicit date dimension table (`Dim Date`) marked as a
-  date table in `model.tmdl` (`dataCategory: Time` and `variation` set to
-  its Date column) rather than relying on auto date/time.
+**Plain business names, no `Fact`/`Dim` prefix** — e.g. `Sales`, `Customer`,
+`Date`, not `Fact Sales` / `Dim Customer` / `Dim Date`. See
+`docs/decisions/0008-drop-fact-dim-table-prefixes.md`: this was a live naming
+tension between this file and `docs/best-practices/power-bi-best-practices.md`
+("clear business names — you don't need DIM/FACT prefix"), resolved in favor
+of the best-practices doc, which is authoritative per
+`../best-practices/SKILL.md`.
+
+The rest of this repo's skill files still use the words "fact table" and
+"dimension table" freely — that's describing a table's **role** in the star
+schema (one row per transaction/event vs. one row per business entity), not
+prescribing a literal name prefix. Don't read "Dim Customer" in an example
+elsewhere as an instruction to prefix the actual table name; it may be a
+holdover from before decision 0008 — treat the plain-name convention as
+current and fix any example you find that still shows a prefix.
+
+- Always include an explicit date dimension table (named `Date`, not
+  `Dim Date`) marked as a date table in `model.tmdl` (`dataCategory: Time`
+  and `variation` set to its Date column) rather than relying on auto
+  date/time.
 - Measures live in a dedicated `_Measures` table (no data columns, just
   measures) so they're easy to find in the model tree — see
-  `../dax-measures/SKILL.md`.
+  `../dax-measures/SKILL.md`. This is the one exception to "no prefix",
+  since `_Measures` isn't a business entity — the leading underscore is
+  there to sort it to the top of the model tree.
 
 ## TMDL basics
 
@@ -56,7 +72,7 @@ TMDL is indentation-sensitive (like YAML), not brace-delimited. A minimal
 table file:
 
 ```tmdl
-table 'Fact Sales'
+table 'Sales'
 
 	column OrderDate
 		dataType: dateTime
@@ -68,7 +84,7 @@ table 'Fact Sales'
 		sourceColumn: Quantity
 		summarizeBy: sum
 
-	partition 'Fact Sales' = m
+	partition 'Sales' = m
 		mode: import
 		source =
 			let
@@ -78,7 +94,7 @@ table 'Fact Sales'
 ```
 
 Key rules:
-- Table/column names with spaces are single-quoted: `'Fact Sales'`.
+- Table/column names with spaces are single-quoted: `'Sales'`.
 - Indentation is one tab per nesting level — be consistent, don't mix tabs
   and spaces.
 - Every table's data is loaded via a `partition ... = m` block whose `source`
@@ -94,12 +110,17 @@ Defined in `relationships.tmdl`, one block per relationship:
 
 ```tmdl
 relationship <GUID-or-stable-id>
-	fromColumn: 'Fact Sales'.CustomerKey
-	toColumn: 'Dim Customer'.CustomerKey
-	crossFilteringBehavior: singleDirection
+	fromColumn: 'Sales'.CustomerKey
+	toColumn: 'Customer'.CustomerKey
+	crossFilteringBehavior: oneDirection
 ```
 
-- Default to `singleDirection` (dimension filters fact). Only use
+- The TOM enum value is `oneDirection`, not `singleDirection` — a bug in an
+  earlier version of this file. It's usually safest to omit
+  `crossFilteringBehavior` entirely when you want the default (one
+  direction, dimension filters fact) and only state it explicitly for
+  `bothDirections`.
+- Default to one direction (dimension filters fact). Only use
   `bothDirections` when there's a specific, understood reason — bidirectional
   filtering can silently produce wrong totals, and is exactly the kind of
   choice that belongs in `docs/decisions/` when it comes up, not a silent
@@ -115,9 +136,10 @@ relationship <GUID-or-stable-id>
 Organize the model diagram/perspective layout so it's reviewable at a
 glance:
 
-- One view/tab showing **all Fact tables at the bottom and all Dim tables
-  at the top**.
-- One view/tab **per Fact table**, showing that fact and its full
+- One view/tab showing **all fact-role tables at the bottom and all
+  dimension tables at the top** (role, not name prefix — see the naming
+  convention above).
+- One view/tab **per fact-role table**, showing that fact and its full
   surrounding star schema only.
 
 In TMDL this maps to `perspective` blocks (or, if the tooling in use doesn't

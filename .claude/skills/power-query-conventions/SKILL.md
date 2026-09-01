@@ -105,7 +105,7 @@ threshold/date-range boundary the assignment implies might change.
 - **Star-schema surrogate keys**: if a dimension lacks a clean natural key,
   generate one (`Table.AddIndexColumn`) rather than joining fact-to-dimension
   on a composite or fuzzy key.
-- **Date dimension**: build `Dim Date` from `List.Dates` spanning the fact
+- **Date dimension**: build `Date` from `List.Dates` spanning the fact
   table's min/max date (plus a small buffer), not a hardcoded fixed range —
   keeps it correct as new data arrives.
 - **Unpivoting wide data**: if a source file has one column per period (e.g.

@@ -22,7 +22,8 @@ file, don't silently follow the stale skill guidance.
 - A dedicated Measures table, with subfolders once there are many measures.
 - **Never implicit measures** in visuals — always explicit.
 - Always format DAX code.
-- Custom `Dim Date` table; `Date` type for date columns, not `Date/Time`;
+- Custom `Date` table (no `Dim` prefix — see decision 0008); `Date` type for
+  date columns, not `Date/Time`;
   never store timestamps.
 - Type every column explicitly in Power Query — never leave a column as the
   generic `ABC123` (Any) type.

@@ -49,7 +49,7 @@ single most common cause of double-counted totals.
   one plausible column (e.g. both `Email` and `CustomerID` look unique),
   ask which one to treat as authoritative rather than picking one.
 - **Role-playing dimensions.** If a fact table has multiple date columns
-  that could each relate to `Dim Date` (e.g. `OrderDate` and `ShipDate`),
+  that could each relate to `Date` (e.g. `OrderDate` and `ShipDate`),
   ask which is the primary analytical date (single active relationship)
   before deciding whether the others need inactive relationships +
   `USERELATIONSHIP` measures — this is real added complexity, not a default.

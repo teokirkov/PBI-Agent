@@ -22,7 +22,7 @@ keep the table browsable.
 Never rely on an implicit measure (a visual auto-aggregating a raw numeric
 column). Every value a visual displays that involves aggregation must come
 from an explicit measure in `_Measures`, even for something as simple as
-`SUM('Fact Sales'[Amount])`. This is a hard team rule, not a style
+`SUM('Sales'[Amount])`. This is a hard team rule, not a style
 preference — implicit measures are a common source of inconsistent
 aggregation behavior across visuals.
 
@@ -38,14 +38,14 @@ aggregation behavior across visuals.
 ## Style
 
 ```tmdl
-measure 'Total Revenue' = SUM('Fact Sales'[Amount])
+measure 'Total Revenue' = SUM('Sales'[Amount])
 	formatString: "$#,##0.00"
 	displayFolder: Sales
 
 measure 'Total Revenue LY' =
 		CALCULATE(
 			[Total Revenue],
-			SAMEPERIODLASTYEAR('Dim Date'[Date])
+			SAMEPERIODLASTYEAR('Date'[Date])
 		)
 	formatString: "$#,##0.00"
 	displayFolder: Sales\Time Intelligence
@@ -60,7 +60,7 @@ measure 'Total Revenue LY' =
   `SUM(...)` repeated — keeps a single source of truth per business
   definition.
 - Time intelligence measures require a proper marked date table
-  (`Dim Date`) — see the TMDL skill. If one doesn't exist yet, that's a
+  (`Date`) — see the TMDL skill. If one doesn't exist yet, that's a
   prerequisite step, not something to skip around with `DATEADD` tricks on a
   non-contiguous date column.
 
