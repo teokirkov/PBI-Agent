@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/1.0.0/schema.json",
+  "name": "prNote",
+  "position": {
+    "x": 40,
+    "y": 1010,
+    "z": 8000,
+    "width": 1840,
+    "height": 46,
+    "tabOrder": 8000
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "horizontalTextAlignment": "left",
+                "textRuns": [
+                  {
+                    "value": "Use Category Group when a breakdown has to add up; use the category tags when you want each tag's true total. 58% of sales are Packaging Materials.",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C",
+                      "fontStyle": "italic"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

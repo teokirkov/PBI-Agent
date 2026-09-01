@@ -7,18 +7,48 @@ starts here.
 - **Deliverable:** `ToyCompanySales.pbip` (+ `.SemanticModel/`, `.Report/`)
 - **Brief:** `docs/assignment/bi-task-1.pdf`
 - **Source data:** `docs/sample-data/bi-task-1/` (7 `.xlsx` files)
-- **Status:** **Semantic model complete** — Power Query, star schema,
-  relationships and all 22 measures are written. Report visuals are **not**
-  built (scaffolded pages only). Nothing is blocked; see §7 for what is open.
+- **Status:** **Semantic model complete; report visuals are a first-pass
+  draft.** Power Query, star schema, relationships and all 22 measures are
+  written and cross-reference-clean. 61 visuals across the 6 pages are
+  hand-authored PBIR JSON that has **never been opened in Power BI Desktop** —
+  treat the report layer as a starting point for a Desktop pass, not as
+  finished work (§6.1). Nothing is blocked; see §7 for what is open.
 
 ### Read these first
 
-1. `docs/decisions/0002` … `0007` — the six answered cross-roads. They are the
-   reason the model looks the way it does.
+1. `docs/decisions/0002` … `0008` — the answered cross-roads and the naming
+   convention. They are the reason the model looks the way it does.
+   **Note:** `0002`–`0007` predate `0008` and therefore still spell table
+   names with the old `Fact `/`Dim ` prefixes (`Dim Product[Category Group]`
+   and so on). Those ADRs are a permanent log of what was decided at the time
+   and were deliberately left unedited — read the *reasoning* from them, but
+   take current table names from §2 below, never from an ADR.
 2. `GRAIN.md` — grain of every source file and every model table
    (assignment task 4).
 3. `ANALYSIS.md` — business findings and, more importantly, the data problems.
 4. §6 below — the one thing a human must do before the project will open.
+
+### Before you finish a run that touched the PBIP
+
+Run the checker. It is fast, has no dependencies, and exists because a
+wide-reaching mechanical edit (like the 0008 rename) is exactly where a single
+missed reference hides:
+
+```
+python3 projects/bi-task-1/validate_tmdl.py
+```
+
+It implements the "Validating your own output" checklist from
+`.claude/skills/pbip-tmdl-structure/SKILL.md` plus the PBIR equivalents:
+table-name ↔ filename ↔ partition-name agreement; every relationship endpoint
+exists and both ends share a data type; `ref table` completeness in both
+directions; `PBI_QueryOrder` names real queries; `sortByColumn` targets;
+`sourceColumn` presence; every DAX table, column and measure reference in
+every measure and calculated table; M expression references; and every PBIR
+visual's field bindings, page list and visual-name/folder agreement.
+
+It checks **internal consistency only.** It is not a TMDL parser and cannot
+tell you whether Desktop accepts a given keyword — see §6.1.
 
 ---
 
@@ -30,7 +60,7 @@ starts here.
 | 2 | Power Query: remove `_` from `SupplierReference`; trim `ColorName` | **Done** — both, see §3 |
 | 3 | Star schema; Date dimension as a **calculated table** | **Done** — `Date` is a DAX `CALENDAR()` calculated table, as mandated |
 | 4 | Document granularity of every table in a separate file | **Done** — `GRAIN.md` |
-| 5 | The 9 main KPIs | **Done** as measures; **not** as visuals |
+| 5 | The 9 main KPIs | **Done** as measures; **draft** as visuals (§6.4) |
 | 6 | Publish to Power BI Service | **Human follow-up** — out of agent scope |
 | 7 | Present the report | **Human follow-up** — out of agent scope |
 
@@ -174,24 +204,25 @@ only (the Desktop/Service/Release items are in §6).
 | Hide fields not used in the report | Yes — every FK, `Line Amount`, `Quantity`, `Picked Quantity`, `Tax Rate`, `Order Date`, and the whole bridge table |
 | Calculated column in Power Query, not DAX | Yes — `Line Amount` and `Category Group` are both M. The only DAX-computed table is `Date`, which the brief mandates |
 | Auto-summarisation off for non-additive fields | Yes — `summarizeBy: none` on every ID, price and rate |
-| Business names on fields and tables | Yes — renamed in Power Query, not cosmetically. Every renamed column carries its source name in a TMDL `///` description |
+| Business names on fields and tables | Yes — renamed in Power Query, not cosmetically. Every renamed column carries its source name in a TMDL `///` description. Tables carry **no `Fact`/`Dim` prefix**, per decision 0008 |
 | Don't store timestamps | Yes — `PickingCompletedWhen` and `ConfirmedDeliveryTime` both carry times and are not loaded |
 | `Date` type, not `Date/Time` | Yes in M (`type date`). Note TMDL/TOM has only `dateTime`, so the columns read `dataType: dateTime` with a date-only `formatString` — that is the correct representation, not an oversight |
 | Measures table, with subfolders | Yes — `_Measures`, 22 measures across `Sales`, `Sales\Time Intelligence`, `Sales\Channel`, `Sales\Order Fulfilment`, `Ranking` |
-| Report page size 1920×1080 | Yes on all 6 scaffold pages |
+| Report page size 1920×1080 | Yes on all 6 pages, and every visual is verified in-bounds and non-overlapping |
 | Always format DAX | Yes |
-| No implicit measures | Yes — and enforced at model level with `discourageImplicitMeasures`, not just by convention |
+| No implicit measures | Yes — and enforced at model level with `discourageImplicitMeasures`, not just by convention. Every field on the canvas is either a dimension attribute or an explicit measure; no visual aggregates a fact column directly |
 | Configure the default page | Yes — `activePageName: overview` |
 | Could DAX transformations be Power Query instead? | Checked — only `Date` is DAX, and only because the brief requires it |
 
 ### Dataset size
 
-`.SemanticModel/` is 43 KB and `.Report/` 2.7 KB on disk — PBIP stores no data,
-so this is the definition only. The source workbooks total 34.5 MB, and the
-loaded model is one 212,774-row fact of 13 narrow, low-cardinality columns plus
-six tiny dimensions. Nowhere near the 200 MB flag threshold, and with the data
-window fixed at 2013–2016 there is no growth path toward 1 GB. No optimisation
-warranted.
+`.SemanticModel/` is 84 KB and `.Report/` 604 KB on disk — PBIP stores no data,
+so this is the definition only, and the report folder is large only because
+PBIR writes one verbose JSON file per visual. The source workbooks total
+34.5 MB, and the loaded model is one 212,774-row fact of 13 narrow,
+low-cardinality columns plus six tiny dimensions. Nowhere near the 200 MB flag
+threshold, and with the data window fixed at 2013–2016 there is no growth path
+toward 1 GB. No optimisation warranted.
 
 ---
 
@@ -211,17 +242,24 @@ the table partitions and expressions, and the `PBI_QueryGroups` annotation from
 Desktop export — it only affects how queries are grouped in the Power Query
 navigator, so removing it costs nothing but the folder organisation.
 
-**Honest statement of confidence:** this TMDL was hand-authored on a Linux CI
-runner with no Power BI Desktop available, so it has never been round-tripped
-through Desktop. Cross-references were validated by script (every relationship
-column, every measure reference, every `sortByColumn` target, every M
-expression reference and every `sourceColumn` resolves), but that checks
-consistency, not that Desktop accepts every keyword. Expect the first open to
-possibly surface syntax nits. The constructs I am least certain of, in order:
-`queryGroup` / `PBI_QueryGroups`; `discourageImplicitMeasures`; the `.Report`
-PBIR JSON. If the report folder is the problem, deleting
-`ToyCompanySales.Report/` and letting Desktop regenerate a blank report loses
-nothing — it holds six empty pages and no visuals.
+**Honest statement of confidence:** this TMDL and PBIR were hand-authored on a
+Linux CI runner with no Power BI Desktop available, so nothing here has ever
+been round-tripped through Desktop. `validate_tmdl.py` confirms every
+cross-reference resolves, but that checks *consistency*, not that Desktop
+accepts every keyword. Expect the first open to surface syntax nits.
+
+Ranked by how unsure I am, with the fallback for each:
+
+| Construct | Where | If Desktop rejects it |
+|---|---|---|
+| PBIR `visual.json` bodies | `.Report/definition/pages/*/visuals/` | Delete the offending `visuals/<name>/` folder — the page survives. Delete `ToyCompanySales.Report/` entirely and Desktop regenerates a blank report; you lose the draft layout and nothing else |
+| `sortDefinition` on a visual query | 20 visuals | Delete the `sortDefinition` block; the visual keeps its fields and just sorts by default |
+| `visualContainerObjects.title` | every non-card visual | Delete the block; the visual falls back to Power BI's auto-generated title |
+| `queryGroup` / `PBI_QueryGroups` | table partitions, `expressions.tmdl`, `model.tmdl` | Delete the `queryGroup:` lines and the annotation. Costs only the Power Query folder organisation |
+| `discourageImplicitMeasures` | `model.tmdl` | Delete the line. All 22 measures are explicit anyway, so this only removes the guard rail |
+
+The **semantic model is the valuable half** and the report layer is the
+speculative half. If the two fight, keep the model and rebuild the report.
 
 ### 6.2 Test before trusting
 
@@ -242,17 +280,56 @@ relationships after data is loaded", **"Auto date/time"** (the model sets
 mandates a custom date table), Q&A if unused, and background data preview
 download. Set Data Cache Management to max. Apply the client colour template.
 
-### 6.4 Report layer
+### 6.4 Report layer — first-pass draft, needs a Desktop pass
 
-Six pages exist with correct 1920×1080 sizing and **no visuals**:
-*Overview*, *Sales Trend & YoY*, *Customers*, *Products & Categories*,
-*Suppliers & Packaging*, *Data Quality & Caveats*. Per `CLAUDE.md` §2, TMDL/PBIR
-does not describe visuals in a way that is practical to hand-author reliably,
-and the trigger comment asked for the model layer. Building them out is either a
-human pass in Desktop or a follow-up run — see §7.
+**61 visuals across the six 1920×1080 pages.** Explicitly a rough draft
+(requested as one): field bindings and layout are done, visual formatting is
+almost entirely default.
 
-`ANALYSIS.md` §4 lists four captions that should go **on the canvas**, not just
-in the docs. The most important is "Data through 29 February 2016".
+| Page | Visuals | What is on it |
+|---|---|---|
+| Overview | 14 | 7 KPI cards, sales-by-month line, channel donut, sales-vs-prior-year columns, year-on-year table |
+| Sales Trend & YoY | 11 | YTD/MTD/LY/YoY cards, Year slicer, monthly trend, combo chart with YoY % on a secondary axis, seasonality by month-of-year with Year as series |
+| Customers | 12 | 6 cards, ranked customer table, sales by customer category, sales and orders by buying group |
+| Products & Categories | 8 | Overlapping category tags (sales and quantity), the additive `Category Group` alongside them for contrast, product table, sales by colour |
+| Suppliers & Packaging | 7 | Sales and quantity by supplier, by supplier category, package type as a table |
+| Data Quality & Caveats | 9 | 4 cards, the deteriorating uninvoiced-share trend, unfulfilled orders by year, and a five-point caveats panel |
+
+Checked mechanically, not just by eye: **all 22 measures appear on the canvas**
+(`validate_tmdl.py` resolves every binding), no visual is off-canvas, no two
+visuals on a page overlap, and every visual name matches its folder.
+
+All four `ANALYSIS.md` §4 captions are on the canvas as textboxes. Caption 1 is
+handled slightly better than asked: rather than typing "Data through 29
+February 2016" into a textbox where it would go stale on the next refresh,
+there is a **`[Last Sales Date]` card** on the Overview, and the textbox
+explains how to read a two-month year.
+
+**Known gaps a Desktop pass should close** — none of these are mistakes, they
+are things deliberately left out of a hand-authored draft:
+
+- **No Top-N filter on the customer table.** It is sorted by `[Total Sales]`
+  descending and shows all 660 rows. A `filterConfig` TopN block is one of the
+  most intricate structures in PBIR and a malformed one risks the whole visual;
+  adding "Top 10 by Total Sales" in the filter pane is a few clicks. This is
+  the single most worthwhile manual addition.
+- **Formatting is default** — no theme colours, data labels, axis titles,
+  number-format overrides, conditional formatting or field-level renaming on
+  the canvas.
+- **Only one slicer** (Year, on Sales Trend). The best-practices doc prefers
+  the filter pane to on-canvas slicers anyway, but cross-page slicer sync is
+  worth setting up.
+- **No bookmarks, drillthrough, tooltips or page navigation.**
+- Textbox heights are estimates. Long captions may clip or scroll at Desktop's
+  actual font metrics — the caveats panel on Data Quality is the most likely to
+  need resizing.
+- Cards carry no explicit title; the classic card renders the measure name as
+  its own label. If a card looks bare, that is why.
+
+The visuals were generated from a throwaway script that was **not** committed,
+deliberately: re-running it would delete the `visuals/` folders and destroy any
+Desktop work. From here the JSON — and then Desktop — is the only source of
+truth.
 
 Also from the checklist, all human-only: test cross-page interactions, hide/lock
 report-level filters, sync slicers where needed, prefer the filter pane over
@@ -274,28 +351,18 @@ from there — the current setup is a manual file drop into the repo (see
 None of these blocks anything — the requested scope is complete. They are
 choices for the next run or the human, not unanswered cross-roads.
 
-1. **Build the report visuals?** Not requested in this run's trigger comment
-   and not attempted. If a future run should attempt them, say so explicitly,
-   because the confidence caveat in §6.1 applies double to PBIR visual JSON.
-2. **Naming convention tension, worth one line of confirmation.**
-   `docs/best-practices/power-bi-best-practices.md` says tables need clear
-   business names with "no `DIM`/`FACT` prefix needed", while
-   `.claude/skills/pbip-tmdl-structure/SKILL.md` mandates `Fact <Subject>` /
-   `Dim <Subject>`. The best-practices doc is supposed to win on conflict, but
-   the previous run proposed `Sales` / `Customer` naming and that
-   proposal was approved on issue #1, so this model uses the prefixes. If the
-   best-practices reading is the intended one, renaming is cheap now and
-   expensive after visuals are bound to field names. **One of the two documents
-   should be corrected either way.**
-3. **Skill file bug.** `.claude/skills/pbip-tmdl-structure/SKILL.md` gives
-   `crossFilteringBehavior: singleDirection` as the single-direction value. The
-   TOM enum is `oneDirection`. This model sidesteps it by omitting the property
-   wherever the default (one direction) is wanted and only stating
-   `bothDirections` explicitly, but the skill file should be fixed.
-4. **Model viewer layout tabs.** The team convention (one tab with all facts
+**Closed since the last run:** the naming-convention tension (decision 0008 —
+prefixes dropped, this model renamed, skill file corrected) and the
+`singleDirection` / `oneDirection` skill-file bug (fixed on `main` in
+`fe64609`). Both are done; nothing to carry forward.
+
+1. **The report layer needs a Desktop pass** — §6.4 lists exactly what is
+   missing and §6.1 what might be rejected outright. Highest-value single
+   addition: a Top-10 filter on the customer table.
+2. **Model viewer layout tabs.** The team convention (one tab with all facts
    bottom / dims top, one tab per fact) is not expressible in hand-authored
    TMDL. Arrange in Desktop's model view.
-5. **Business questions raised by the data**, listed in `ANALYSIS.md` §5 — the
+3. **Business questions raised by the data**, listed in `ANALYSIS.md` §5 — the
    most useful being: request the underlying product-to-stock-group table
    instead of the flattened `CategoryName1/2/3` columns, and investigate why
    unpicked orders rose from 2.31% to 6.71% of the book in three years.
@@ -308,6 +375,7 @@ choices for the next run or the human, not unanswered cross-roads.
 |---|---|---|
 | 2026-09-01 | issue #1, "Start BI Task 1" | Discover + Profile only, as instructed. Profiled all 7 files, verified referential integrity and grain. Stopped before modeling; six questions posted. Branch `claude/issue-1-20260901-1007`. |
 | 2026-09-01 | issue #1, answers to Q1–Q6 | Built the semantic model: PBIP scaffold, 4 model queries + 3 staging expressions, 7 relationships, `Date` calculated table, 22 measures. Logged decisions 0002–0007. Wrote `GRAIN.md` and `ANALYSIS.md`, rewrote this file. Determined Q3 from the data (categories are a many-to-many). Corrected the earlier `SupplierReference` finding. Report visuals not built. Branch `claude/issue-1-20260901-1026`. |
+| 2026-09-01 | issue #1, "rename per 0008, then draft visuals" | **Rename:** dropped the `Fact`/`Dim` prefixes across `.tmdl` filenames, table and partition declarations, all 7 relationships (and their names), all 22 measures, the `Date` calculated table's DAX, `model.tmdl`'s `ref table` list and `PBI_QueryOrder`, every `///` description, and all three project docs. Added `validate_tmdl.py` and verified it fails on injected faults before trusting a clean pass. **Visuals:** 61 first-pass PBIR visuals across the 6 pages, all 22 measures on canvas, geometry verified. Branch `claude/issue-1-20260901-1203`. |
 
 > **Note for the next run:** the first run's `NOTES.md` was left on its own
 > branch and was **not** on `main`, so this run had to recover it with
@@ -320,8 +388,14 @@ choices for the next run or the human, not unanswered cross-roads.
 
 ### Next run should
 
-1. Read `docs/decisions/0002`–`0007` before touching anything — they encode
-   choices that are expensive to unwind.
-2. Confirm whether report visuals are wanted (§7.1) before attempting them.
-3. Verify against the reconciliation figures in §2 if the model has been opened
-   in Desktop by then.
+1. Read `docs/decisions/0002`–`0008` before touching anything — they encode
+   choices that are expensive to unwind. Remember `0002`–`0007` still use the
+   old prefixed table names in their examples; take current names from §2.
+2. Run `python3 projects/bi-task-1/validate_tmdl.py` before **and** after any
+   edit to the PBIP, so a break is attributable to this run rather than
+   inherited.
+3. **Ask before regenerating the report layer.** If the project has been opened
+   in Desktop since 2026-09-01, the `.Report/` JSON is now human-edited work
+   and overwriting it destroys that. Diff against this branch first.
+4. Verify against the reconciliation figures in §2 if the model has been opened
+   in Desktop by then, and against the bridge spot-check in §6.2.

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/1.0.0/schema.json",
+  "name": "stNote",
+  "position": {
+    "x": 40,
+    "y": 956,
+    "z": 11000,
+    "width": 1840,
+    "height": 100,
+    "tabOrder": 11000
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "horizontalTextAlignment": "left",
+                "textRuns": [
+                  {
+                    "value": "Growth is coming from order volume, not order size: orders grew 9.0% then 10.1% while average order value stayed within £40 of £2,410 across all four years. Seasonality is mild — February is the low month at 0.83× the average and July the high at 1.15×.",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C",
+                      "fontStyle": "italic"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

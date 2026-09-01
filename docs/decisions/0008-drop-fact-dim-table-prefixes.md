@@ -53,3 +53,17 @@ which document was wrong, not a judgment call.
   a missed reference in.
 - "Fact table" / "dimension table" remain fine as role terminology in prose
   across the skill files — only the literal name prefix is dropped.
+
+## Status of the rename
+
+**Done** on 2026-09-01 (issue #1, branch `claude/issue-1-20260901-1203`),
+before any report visuals existed, so nothing had to be re-bound. Verified with
+`projects/bi-task-1/validate_tmdl.py`, added in the same commit to mechanise
+the "Validating your own output" checklist this entry points at.
+
+Decisions `0002`–`0007` were **deliberately left unedited**: they are a
+permanent log of what was decided at the time, and rewriting them to match a
+later naming convention would falsify that record. The consequence is that
+their examples still read `Dim Product[Category Group]` and similar. A future
+run should take current table names from `projects/bi-task-1/NOTES.md` §2, not
+from an ADR — this is flagged at the top of that file.

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/1.0.0/schema.json",
+  "name": "prOverlap",
+  "position": {
+    "x": 1240,
+    "y": 24,
+    "z": 2000,
+    "width": 640,
+    "height": 76,
+    "tabOrder": 2000
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "horizontalTextAlignment": "right",
+                "textRuns": [
+                  {
+                    "value": "A product can carry up to 3 category tags, so category figures overlap and do NOT sum to the total: the nine categories add to £265.8m against a £163.0m grand total (1.63×). Each individual figure is correct.",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C",
+                      "fontWeight": "bold",
+                      "fontStyle": "italic"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

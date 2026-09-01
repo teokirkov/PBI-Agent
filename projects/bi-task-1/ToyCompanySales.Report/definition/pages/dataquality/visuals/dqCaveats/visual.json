@@ -1,0 +1,158 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/1.0.0/schema.json",
+  "name": "dqCaveats",
+  "position": {
+    "x": 40,
+    "y": 600,
+    "z": 9000,
+    "width": 1840,
+    "height": 456,
+    "tabOrder": 9000
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "horizontalTextAlignment": "left",
+                "textRuns": [
+                  {
+                    "value": "Five things a reader needs to know",
+                    "textStyle": {
+                      "fontSize": "14pt",
+                      "color": "#252423",
+                      "fontWeight": "bold"
+                    }
+                  }
+                ]
+              },
+              {
+                "horizontalTextAlignment": "left",
+                "textRuns": [
+                  {
+                    "value": "1.  Sales = Quantity × Unit Price, ex-tax, at order-line grain.  ",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#252423",
+                      "fontWeight": "bold"
+                    }
+                  },
+                  {
+                    "value": "Sales.xlsx also carries AmountExcludingTax / TaxAmount / TransactionAmount, which are at invoice grain repeated on every line — summing those would return £583.9m against a true £158.1m, 3.69× too high. They are not loaded into this model at all, so the mistake is unavailable.",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C"
+                    }
+                  }
+                ]
+              },
+              {
+                "horizontalTextAlignment": "left",
+                "textRuns": [
+                  {
+                    "value": "2.  Category figures overlap and do not add up.  ",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#252423",
+                      "fontWeight": "bold"
+                    }
+                  },
+                  {
+                    "value": "CategoryName1/2/3 in the source is not a hierarchy — it is an alphabetically sorted, repetition-padded flattening of a product-to-stock-group many-to-many. The nine tags sum to £265.8m against a £163.0m grand total, 1.63×. For a breakdown that reconciles, use Product[Category Group].",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C"
+                    }
+                  }
+                ]
+              },
+              {
+                "horizontalTextAlignment": "left",
+                "textRuns": [
+                  {
+                    "value": "3.  \"Online sales\" means sales to online-type customers.  ",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#252423",
+                      "fontWeight": "bold"
+                    }
+                  },
+                  {
+                    "value": "OnlineSalesConditional sits on the customer, not the order, and is perfectly determined by buying group. There is no order-level channel flag anywhere in the seven source files.",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C"
+                    }
+                  }
+                ]
+              },
+              {
+                "horizontalTextAlignment": "left",
+                "textRuns": [
+                  {
+                    "value": "4.  Total Sales includes £4.9m of orders that were never invoiced, 3.0%.  ",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#252423",
+                      "fontWeight": "bold"
+                    }
+                  },
+                  {
+                    "value": "That was a deliberate choice, because the brief counts orders. But £4.68m of it was never even picked, so it should not be read as revenue — and the rate has risen from 2.31% of orders in 2013 to 6.71% in 2016.",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C"
+                    }
+                  }
+                ]
+              },
+              {
+                "horizontalTextAlignment": "left",
+                "textRuns": [
+                  {
+                    "value": "5.  The customer distribution is unusually flat.  ",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#252423",
+                      "fontWeight": "bold"
+                    }
+                  },
+                  {
+                    "value": "660 active customers, the largest 0.22% of turnover, top 10 just 2.1%. Real B2B books are Pareto-shaped. The TOP-customers ranking is mechanically correct but close to noise.",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C"
+                    }
+                  }
+                ]
+              },
+              {
+                "horizontalTextAlignment": "left",
+                "textRuns": [
+                  {
+                    "value": "Not possible with this data:  ",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#252423",
+                      "fontWeight": "bold"
+                    }
+                  },
+                  {
+                    "value": "geography (no City lookup table), salesperson performance (five person-ID columns, no Person table), and discount analysis (every special deal is dated after the last order). Full detail in ANALYSIS.md.",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

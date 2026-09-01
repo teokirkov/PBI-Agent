@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/1.0.0/schema.json",
+  "name": "cuFlat",
+  "position": {
+    "x": 40,
+    "y": 892,
+    "z": 12000,
+    "width": 1840,
+    "height": 164,
+    "tabOrder": 12000
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "horizontalTextAlignment": "left",
+                "textRuns": [
+                  {
+                    "value": "Read the ranking as a league table, not a story. 660 of 663 customers have sales and the largest is 0.22% of turnover; the top 10 together are 2.1%, and first and tenth place differ by 8%. A month more data would probably reshuffle the order. Buying group is perfectly determined by sales channel — all 402 customers with a buying group are Online Sale, all 261 without are Retail Sale.",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C",
+                      "fontStyle": "italic"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

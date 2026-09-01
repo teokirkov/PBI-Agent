@@ -1,0 +1,39 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/1.0.0/schema.json",
+  "name": "suNote",
+  "position": {
+    "x": 1240,
+    "y": 24,
+    "z": 2000,
+    "width": 640,
+    "height": 60,
+    "tabOrder": 2000
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "horizontalTextAlignment": "right",
+                "textRuns": [
+                  {
+                    "value": "Two suppliers are 86% of turnover, and 6 of the 13 on file have no sales at all.",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C",
+                      "fontWeight": "bold",
+                      "fontStyle": "italic"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

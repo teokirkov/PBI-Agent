@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/1.0.0/schema.json",
+  "name": "dqCardUninvPct",
+  "position": {
+    "x": 966,
+    "y": 100,
+    "z": 5000,
+    "width": 451,
+    "height": 124,
+    "tabOrder": 5000
+  },
+  "visual": {
+    "visualType": "card",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Uninvoiced Sales %"
+                }
+              },
+              "queryRef": "_Measures.Uninvoiced Sales %",
+              "nativeQueryRef": "Uninvoiced Sales %"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

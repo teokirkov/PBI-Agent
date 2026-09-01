@@ -331,10 +331,14 @@ correct — it affects which conclusions are safe to draw from it.
 
 ## 4. What a reader of the report should be told
 
-Four captions worth putting on the canvas rather than leaving in this file:
+Four captions worth putting on the canvas rather than leaving in this file.
+**All four are now on it** as textboxes in the first-pass draft — see
+`NOTES.md` §6.4.
 
 1. **"Data through 29 February 2016."** `[Last Sales Date]` is a measure for
-   exactly this. Without it, every 2016 figure invites a wrong conclusion.
+   exactly this. Without it, every 2016 figure invites a wrong conclusion. On
+   the canvas it is a **card** bound to that measure rather than typed text, so
+   it cannot go stale on a refresh.
 2. **"YoY compares like-for-like periods."** Otherwise a reader who checks the
    arithmetic against full-year 2015 will think the measure is broken.
 3. **"A product can carry up to 3 category tags, so category figures overlap and

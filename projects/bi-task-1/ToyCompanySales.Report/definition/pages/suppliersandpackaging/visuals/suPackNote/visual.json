@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/1.0.0/schema.json",
+  "name": "suPackNote",
+  "position": {
+    "x": 40,
+    "y": 952,
+    "z": 7000,
+    "width": 1840,
+    "height": 104,
+    "tabOrder": 7000
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "horizontalTextAlignment": "left",
+                "textRuns": [
+                  {
+                    "value": "Package type is a near-degenerate dimension and the visual is expected to look broken: only 4 of the 14 package types appear in sales, and \"Each\" is £158.5m of the £163.0m (97%). Packet (£2.7m), Pair (£1.3m) and Bag (£0.4m) round to nothing on a chart, which is why this one is a table rather than a bar chart.",
+                    "textStyle": {
+                      "fontSize": "11pt",
+                      "color": "#605E5C",
+                      "fontStyle": "italic"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

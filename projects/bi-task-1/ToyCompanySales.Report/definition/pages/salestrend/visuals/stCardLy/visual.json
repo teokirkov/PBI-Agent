@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/1.0.0/schema.json",
+  "name": "stCardLy",
+  "position": {
+    "x": 794,
+    "y": 100,
+    "z": 6000,
+    "width": 365,
+    "height": 124,
+    "tabOrder": 6000
+  },
+  "visual": {
+    "visualType": "card",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Sales LY (Like-for-Like)"
+                }
+              },
+              "queryRef": "_Measures.Sales LY (Like-for-Like)",
+              "nativeQueryRef": "Sales LY (Like-for-Like)"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true
+  }
+}
