@@ -103,6 +103,18 @@ Key rules:
 - Set `summarizeBy: none` on any numeric column that is a key or shouldn't
   auto-aggregate (e.g. an ID stored as a number) — leaving Power BI's default
   aggregation on ID-like numeric columns is a common, easy-to-miss mistake.
+- **`///` doc-comments must be immediately followed by the object they
+  document — no blank line in between.** Confirmed against real Power BI
+  Desktop (June 2026 release), which threw a hard parse error
+  (`InvalidLineType: Unexpected line type: Empty!`) on a `///` block that
+  wasn't attached to anything, followed by a blank line, followed by another
+  `///` block attached to the next declaration. `///` opens a "pending
+  documentation" state that a blank line cannot appear inside before it
+  attaches. Any comment that is **not** immediately above the one thing it
+  documents — a file-level header note, a comment between two declarations
+  for spacing/readability — must use plain `//` instead, which has no such
+  restriction. When in doubt, use `//`; reserve `///` only for a comment
+  block with zero blank lines between it and the declaration directly below.
 
 ## Relationships
 
