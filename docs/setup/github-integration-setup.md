@@ -30,7 +30,41 @@ setup of any kind is required.
 
 ---
 
-## Step 2 — Open it in a Codespace
+## Step 2 — Add your project files
+**Where:** Local terminal, or GitHub.com in a browser
+
+**Do this before Step 3.** GitHub can't create a Codespace on a fully
+empty repository — a Codespace needs a default branch to check out, and a
+repo with zero commits doesn't have one yet. So the repo needs at least
+one commit before you can open it in a Codespace at all; the order in
+earlier drafts of this doc (Codespace, *then* add files) doesn't actually
+work.
+
+If you already have project files locally (e.g. a `CLAUDE.md` and
+supporting folders — such as this repo's scaffold), push them from your
+local machine — this only needs **git**, not Node/npm, so it works even on
+locked-down machines:
+```
+cd "path/to/your/local/project"
+git init
+git add .
+git commit -m "Add project files"
+git remote add origin https://github.com/yourusername/your-repo.git
+git branch -M main
+git push -u origin main
+```
+
+**Alternatively**, if you have no local files and no git at all, you don't
+need a terminal for this step either — on the repo's GitHub.com page,
+**Add file → Create new file**, add even one small file (a stub
+`README.md` is enough), and **Commit directly to the main branch**. That
+alone gives the repo a default branch, which is all Step 3 needs — you can
+add the rest of the project's files afterward, from inside the Codespace
+once it exists.
+
+---
+
+## Step 3 — Open it in a Codespace
 **Where:** GitHub.com (browser)
 
 1. On the repo's page → green **Code** button → **Codespaces** tab →
@@ -40,7 +74,7 @@ setup of any kind is required.
 
 ---
 
-## Step 3 — Install Claude Code and log in
+## Step 4 — Install Claude Code and log in
 **Where:** Codespace terminal (opens automatically at the bottom)
 
 ```
@@ -53,7 +87,7 @@ claude
 
 ---
 
-## Step 4 — Install the GitHub App and workflow
+## Step 5 — Install the GitHub App and workflow
 **Where:** Codespace terminal, inside the running `claude` session
 
 ```
@@ -68,37 +102,10 @@ Exit the session when done:
 exit
 ```
 
----
-
-## Step 5 — Add your project files
-**Where:** Codespace terminal
-
-If you already have project files locally (e.g. a `CLAUDE.md` and
-supporting folders — such as this repo's scaffold), the simplest route is
-to push them from your local machine — this only needs **git**, not
-Node/npm, so it works even on locked-down machines:
-```
-cd "path/to/your/local/project"
-git init
-git add .
-git commit -m "Add project files"
-git remote add origin https://github.com/yourusername/your-repo.git
-git branch -M main
-git push -u origin main
-```
-Then, back in the Codespace terminal:
-```
-git pull origin main
-```
-
-**Alternatively**, if you're starting fresh with no local files, just
-create them directly in the Codespace terminal using the file editor or
-`cat > filename << 'EOF' ... EOF` heredocs, then:
-```
-git add .
-git commit -m "Add project files"
-git push origin main
-```
+If you pushed only a stub file in Step 2, this is also the point to add
+the rest of your project's files from the Codespace terminal (`git add .`,
+`git commit`, `git push`) — same commands as Step 2's git block, just run
+from inside the Codespace instead of your local machine.
 
 ---
 
@@ -184,6 +191,17 @@ change (broader blast radius if something goes wrong in a run), so treat
 it as a deliberate decision, not a default — see
 `docs/decisions/` once you make a call here, and log it there.
 
+**A shortcut worth knowing about:** everything in Steps 3-5 (Codespace,
+installing the CLI, `/install-github-app`) exists to get a working
+`.github/workflows/claude.yml` plus the `ANTHROPIC_API_KEY` secret in
+place. If you already have both — e.g. by copying this repo's workflow
+file directly and adding the secret via the web UI, as in Step 7 — the
+agent works without ever opening a Codespace or running
+`/install-github-app` at all. This repo's own history is proof: its
+workflow was hand-authored and pushed via plain `git`, never through a
+Codespace. Steps 3-5 are the no-local-tools-needed path, not a strict
+requirement.
+
 ---
 
 ## Step 9 — Test it
@@ -213,10 +231,10 @@ name is exactly `ANTHROPIC_API_KEY` and the key itself is valid.
 | Step | Where | What |
 |---|---|---|
 | 1 | GitHub.com | Create empty repo |
-| 2 | GitHub.com | Open in Codespace |
-| 3 | Codespace terminal | Install Claude Code, log in |
-| 4 | Codespace terminal | `/install-github-app` |
-| 5 | Local (git only) or Codespace | Push project files |
+| 2 | Local (git) or GitHub.com | Push/add initial project files — required before Step 3 |
+| 3 | GitHub.com | Open in Codespace |
+| 4 | Codespace terminal | Install Claude Code, log in |
+| 5 | Codespace terminal | `/install-github-app` |
 | 6 | Anthropic Console | Create API key |
 | 7 | GitHub.com | Add key as `ANTHROPIC_API_KEY` secret |
 | 8 | Codespace terminal | Configure `claude.yml` with the key + web tools |
